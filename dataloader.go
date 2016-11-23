@@ -36,6 +36,8 @@ type Result struct {
 	Error error
 }
 
+// ResultMany is used by the loadMany method. It contains a list of resolved data and a list of erros
+// if any occured.
 type ResultMany struct {
 	Data  []interface{}
 	Error []error
