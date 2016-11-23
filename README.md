@@ -6,12 +6,6 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 ## Status
 This project is a work in progress. Feedback is encouraged.
 
-## Examples
-Coming soon. For now it may be helpful to look at the test file.
-
-## Cache
-This implementation contains a very basic cache that is intended only to be used for short lived DataLoaders (i.e. DataLoaders that ony exsist for the life of an http request). You may use your own implementation if you want.
-
 ## Usage
 ```go
 // setup batch function
@@ -34,4 +28,10 @@ if result.Error != nil {
 
 log.Printf("value: %#v", result.Data)
 ```
+
+## Cache
+This implementation contains a very basic cache that is intended only to be used for short lived DataLoaders (i.e. DataLoaders that ony exsist for the life of an http request). You may use your own implementation if you want.
+
+## Examples
+Coming soon. For now it may be helpful to look at the test file.
 
