@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 )
 
 var ts *httptest.Server
+
 var data map[string]string
+var lock sync.Mutex
 
 func init() {
 	data = map[string]string{
@@ -32,7 +35,9 @@ func init() {
 		var d []string
 		ids := r.URL.Query()["id"]
 		for _, id := range ids {
+			lock.Lock()
 			d = append(d, data[id])
+			lock.Unlock()
 		}
 		b, _ := json.MarshalIndent(d, "", "  ")
 		fmt.Fprintln(w, string(b))

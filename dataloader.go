@@ -95,10 +95,15 @@ func (l *Loader) Load(key string) <-chan *Result {
 	return c
 }
 
-// this help ensure that data return is in same order
-// as data recieved
+// this help ensure that data return is in same order as data recieved
 type result struct {
 	*Result
+	index int
+}
+
+// this help match the error to the key of a specific index
+type resultError struct {
+	error
 	index int
 }
 
@@ -118,13 +123,13 @@ func (l *Loader) LoadMany(keys []string) <-chan *ResultMany {
 	go func() {
 		defer close(out)
 		var i int = 1
-		var outputErrors []error
 		outputData := make([]interface{}, len(keys), len(keys))
+		outputErrors := make([]error, 0, len(keys))
 		for result := range c {
 			log.Printf("res: %#v", result.Data)
 			outputData[result.index] = result.Data
 			if result.Error != nil {
-				outputErrors = append(outputErrors, result.Error)
+				outputErrors = append(outputErrors, resultError{result.Error, result.index})
 			}
 			if i == len(keys) {
 				close(c)
