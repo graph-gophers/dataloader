@@ -28,7 +28,7 @@ type Interface interface {
 // BatchFunc is a Function, which when given an Array of keys (string), returns an array of `results`.
 // It's important the the length of the input keys must match the length of
 // the ouput results.
-type BatchFunc func([]string) []Result
+type BatchFunc func([]string) []*Result
 
 // Result is the data structure that is primarily used by the BatchFunc. It contains the resolved data,
 // and any errors that may have occured while fetching the data.
@@ -189,8 +189,8 @@ func (l *Loader) batch() {
 		reqs = append(reqs, item)
 	}
 
-	c := make(chan []Result)
-	go func(channel chan []Result) {
+	c := make(chan []*Result)
+	go func(channel chan []*Result) {
 		channel <- l.batchFn(keys)
 	}(c)
 	items := <-c
@@ -201,7 +201,7 @@ func (l *Loader) batch() {
 
 	for i, req := range reqs {
 		l.cache.Set(req.key, items[i].Data)
-		req.channel <- &items[i]
+		req.channel <- items[i]
 		close(req.channel)
 	}
 }

@@ -45,7 +45,7 @@ func init() {
 }
 
 // the only thing we need is a batch function that follow this signature
-func batchUsers(keys []string) (results []Result) {
+func batchUsers(keys []string) (results []*Result) {
 	var brands []string
 	v := url.Values{}
 	for _, key := range keys {
@@ -60,7 +60,7 @@ func batchUsers(keys []string) (results []Result) {
 		// do something
 	}
 	for _, brand := range brands {
-		results = append(results, Result{brand, nil})
+		results = append(results, &Result{brand, nil})
 	}
 	return
 }
