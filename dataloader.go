@@ -4,6 +4,7 @@ package dataloader
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -17,8 +18,8 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(string) <-chan Result
-	LoadMany([]string) <-chan ResultMany
+	Load(string) <-chan *Result
+	LoadMany([]string) <-chan *ResultMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
@@ -66,7 +67,7 @@ type Loader struct {
 // type used to on input channel
 type batchRequest struct {
 	key     string
-	channel chan Result
+	channel chan *Result
 }
 
 // NewBatchedLoader constructs a new Loader with given options
@@ -80,11 +81,11 @@ func NewBatchedLoader(batchFn BatchFunc, timeout time.Duration, cache Cache, cap
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(key string) <-chan Result {
-	c := make(chan Result, 1)
+func (l *Loader) Load(key string) <-chan *Result {
+	c := make(chan *Result, 1)
 	if v, ok := l.cache.Get(key); ok {
 		defer func() {
-			c <- Result{v, nil}
+			c <- &Result{v, nil}
 			close(c)
 		}()
 		return c
@@ -94,23 +95,34 @@ func (l *Loader) Load(key string) <-chan Result {
 	return c
 }
 
+// this help ensure that data return is in same order
+// as data recieved
+type result struct {
+	*Result
+	index int
+}
+
 // LoadMany loads mulitiple keys, returning a channel that will resolve to an array of values and an error
-func (l *Loader) LoadMany(keys []string) <-chan ResultMany {
-	out := make(chan ResultMany, 1)
-	c := make(chan Result, len(keys))
+func (l *Loader) LoadMany(keys []string) <-chan *ResultMany {
+	out := make(chan *ResultMany, 1)
+	c := make(chan *result, len(keys))
 
 	for i := range keys {
-		future := l.Load(keys[i])
-		c <- <-future
+		go func(i int) {
+			future := l.Load(keys[i])
+			value := <-future
+			c <- &result{value, i}
+		}(i)
 	}
 
-	go func(channel chan ResultMany) {
+	go func() {
 		defer close(out)
-		var outputData []interface{}
-		var outputErrors []error
 		var i int = 1
+		var outputErrors []error
+		outputData := make([]interface{}, len(keys), len(keys))
 		for result := range c {
-			outputData = append(outputData, result.Data)
+			log.Printf("res: %#v", result.Data)
+			outputData[result.index] = result.Data
 			if result.Error != nil {
 				outputErrors = append(outputErrors, result.Error)
 			}
@@ -119,8 +131,8 @@ func (l *Loader) LoadMany(keys []string) <-chan ResultMany {
 			}
 			i++
 		}
-		out <- ResultMany{outputData, outputErrors}
-	}(out)
+		out <- &ResultMany{outputData, outputErrors}
+	}()
 
 	return out
 }
@@ -184,7 +196,7 @@ func (l *Loader) batch() {
 
 	for i, req := range reqs {
 		l.cache.Set(req.key, items[i].Data)
-		req.channel <- items[i]
+		req.channel <- &items[i]
 		close(req.channel)
 	}
 }
