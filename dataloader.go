@@ -48,10 +48,6 @@ type ResultMany struct {
 type Loader struct {
 	// the batch function to be used by this loader
 	batchFn BatchFunc
-	// the interval on how often to batch requests. The javascript implementation uses the event loop
-	// to determine how often to batch, that concept doens't apply well to Golang so I would recommend
-	// using a value <= 16 milliseconds to mimick that functionality
-	timeout time.Duration
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
 	cap int
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
@@ -71,11 +67,10 @@ type batchRequest struct {
 }
 
 // NewBatchedLoader constructs a new Loader with given options
-func NewBatchedLoader(batchFn BatchFunc, timeout time.Duration, cache Cache, cap int) *Loader {
+func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 	return &Loader{
 		batchFn: batchFn,
 		cache:   cache,
-		timeout: timeout,
 		cap:     cap,
 	}
 }
@@ -208,8 +203,8 @@ func (l *Loader) batch() {
 
 // wait the appropriate amount of time for next batch
 func (l *Loader) sleeper() {
-	time.Sleep(l.timeout)
-
+	// this will move this goroutine to the back of the callstack
+	time.Sleep(1)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

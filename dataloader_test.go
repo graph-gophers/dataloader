@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"sync"
 	"testing"
-	"time"
 )
 
 var ts *httptest.Server
@@ -67,7 +67,7 @@ func batchUsers(keys []string) (results []*Result) {
 
 func TestLoader(t *testing.T) {
 	cache := NewCache()
-	UserLoader := NewBatchedLoader(batchUsers, time.Duration(16*time.Millisecond), cache, 0)
+	UserLoader := NewBatchedLoader(batchUsers, cache, 0)
 
 	UserLoader.Prime("cachedId", "TEST BRAND")
 
@@ -91,4 +91,43 @@ func TestLoader(t *testing.T) {
 	log.Printf("test3: %#v", value3)
 	log.Printf("test4: %#v", value4)
 	log.Printf("test many: %#v", values)
+}
+
+var a *Avg = &Avg{}
+
+func batchIdentity(keys []string) (results []*Result) {
+	a.Add(len(keys))
+	for _, key := range keys {
+		results = append(results, &Result{key, nil})
+	}
+	return
+}
+
+func BenchmarkLoader(b *testing.B) {
+	cache := NewCache()
+	UserLoader := NewBatchedLoader(batchIdentity, cache, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		UserLoader.Load(strconv.Itoa(i))
+	}
+	log.Printf("avg: %f", a.Avg())
+}
+
+type Avg struct {
+	total  float64
+	length float64
+}
+
+func (a *Avg) Add(v int) {
+	a.total += float64(v)
+	a.length += 1
+}
+
+func (a *Avg) Avg() float64 {
+	if a.total == 0 {
+		return 0
+	} else if a.length == 0 {
+		return 0
+	}
+	return a.total / a.length
 }

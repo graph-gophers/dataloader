@@ -63,3 +63,13 @@ func (c *InMemoryCache) Clear() {
 	c.items = map[string]interface{}{}
 	c.mu.Unlock()
 }
+
+// NoCache implements Cache interface where all methods are noops.
+// This is useful for when you don't want to cache items but still
+// want to use a data loader
+type NoCache struct{}
+
+func (c *NoCache) Get(string) (interface{}, bool) { return nil, false }
+func (c *NoCache) Set(string, interface{})        { return }
+func (c *NoCache) Delete(string)                  { return }
+func (c *NoCache) Clear()                         { return }
