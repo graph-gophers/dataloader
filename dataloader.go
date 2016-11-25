@@ -211,3 +211,33 @@ func (l *Loader) sleeper() {
 	close(l.input)
 	l.input = nil
 }
+
+func UniqueBatchFunc(fn BatchFunc) BatchFunc {
+	return func(keys []string) []*Result {
+		out := make([]*Result, len(keys), len(keys))
+		dict := make(map[string]int)
+		position := make([][]int, 0, len(keys))
+		var uniqueKeys []string
+		var idx int
+		for i, key := range keys {
+			if _, ok := dict[key]; !ok {
+				dict[key] = i
+				position = append(position, []int{i})
+				uniqueKeys = append(uniqueKeys, key)
+				idx++
+			} else {
+				position[dict[key]] = append(position[dict[key]], i)
+			}
+		}
+
+		results := fn(uniqueKeys)
+
+		for i, ids := range position {
+			for _, v := range ids {
+				out[v] = results[i]
+			}
+		}
+
+		return out
+	}
+}

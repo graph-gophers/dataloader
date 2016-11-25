@@ -67,7 +67,7 @@ func batchUsers(keys []string) (results []*Result) {
 
 func TestLoader(t *testing.T) {
 	cache := NewCache()
-	UserLoader := NewBatchedLoader(batchUsers, cache, 0)
+	UserLoader := NewBatchedLoader(UniqueBatchFunc(batchUsers), cache, 0)
 
 	UserLoader.Prime("cachedId", "TEST BRAND")
 
