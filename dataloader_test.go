@@ -69,26 +69,24 @@ func TestLoader(t *testing.T) {
 	cache := NewCache()
 	UserLoader := NewBatchedLoader(UniqueBatchFunc(batchUsers), cache, 0)
 
-	UserLoader.Prime("cachedId", "TEST BRAND")
+	// UserLoader.Prime("cachedId", "TEST BRAND")
 
 	future1 := UserLoader.Load("1")
 	future2 := UserLoader.Load("2")
-	future3 := UserLoader.Load("cachedId")
+	// future3 := UserLoader.Load("cachedId")
 
-	value1 := <-future1
-	value2 := <-future2
-	value3 := <-future3
+	value1 := future1()
+	value2 := future2()
 
 	// should be cached by this point
 	future4 := UserLoader.Load("1")
-	value4 := <-future4
+	value4 := future4()
 
 	listFuture := UserLoader.LoadMany([]string{"3", "4"})
-	values := <-listFuture
+	values := listFuture()
 
 	log.Printf("test1: %#v", value1)
 	log.Printf("test2: %#v", value2)
-	log.Printf("test3: %#v", value3)
 	log.Printf("test4: %#v", value4)
 	log.Printf("test many: %#v", values)
 }
@@ -108,7 +106,7 @@ func BenchmarkLoader(b *testing.B) {
 	UserLoader := NewBatchedLoader(batchIdentity, cache, 0)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		UserLoader.Load(strconv.Itoa(i))
+		UserLoader.Load(strconv.Itoa(i % 1000))
 	}
 	log.Printf("avg: %f", a.Avg())
 }

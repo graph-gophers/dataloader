@@ -4,7 +4,6 @@ package dataloader
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -18,8 +17,8 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(string) <-chan *Result
-	LoadMany([]string) <-chan *ResultMany
+	Load(string) Getter
+	LoadMany([]string) GetterMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
@@ -66,6 +65,9 @@ type batchRequest struct {
 	channel chan *Result
 }
 
+type Getter func() *Result
+type GetterMany func() *ResultMany
+
 // NewBatchedLoader constructs a new Loader with given options
 func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 	return &Loader{
@@ -76,18 +78,25 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(key string) <-chan *Result {
+func (l *Loader) Load(key string) Getter {
 	c := make(chan *Result, 1)
 	if v, ok := l.cache.Get(key); ok {
-		defer func() {
-			c <- &Result{v, nil}
-			close(c)
-		}()
-		return c
+		return v.(func() *Result)
 	}
+
+	var value *Result
+	getter := func() *Result {
+		if v, ok := <-c; ok {
+			value = v
+		}
+		return value
+	}
+
+	l.cache.Set(key, getter)
 	req := &batchRequest{key, c}
 	l.addToQueue(req)
-	return c
+
+	return getter
 }
 
 // this help ensure that data return is in same order as data recieved
@@ -103,15 +112,14 @@ type resultError struct {
 }
 
 // LoadMany loads mulitiple keys, returning a channel that will resolve to an array of values and an error
-func (l *Loader) LoadMany(keys []string) <-chan *ResultMany {
+func (l *Loader) LoadMany(keys []string) GetterMany {
 	out := make(chan *ResultMany, 1)
 	c := make(chan *result, len(keys))
 
 	for i := range keys {
 		go func(i int) {
-			future := l.Load(keys[i])
-			value := <-future
-			c <- &result{value, i}
+			getter := l.Load(keys[i])
+			c <- &result{getter(), i}
 		}(i)
 	}
 
@@ -121,7 +129,6 @@ func (l *Loader) LoadMany(keys []string) <-chan *ResultMany {
 		outputData := make([]interface{}, len(keys), len(keys))
 		outputErrors := make([]error, 0, len(keys))
 		for result := range c {
-			log.Printf("res: %#v", result.Data)
 			outputData[result.index] = result.Data
 			if result.Error != nil {
 				outputErrors = append(outputErrors, resultError{result.Error, result.index})
@@ -134,7 +141,15 @@ func (l *Loader) LoadMany(keys []string) <-chan *ResultMany {
 		out <- &ResultMany{outputData, outputErrors}
 	}()
 
-	return out
+	var value *ResultMany
+	getterMany := func() *ResultMany {
+		if v, ok := <-out; ok {
+			value = v
+		}
+		return value
+	}
+
+	return getterMany
 }
 
 // Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
@@ -184,18 +199,13 @@ func (l *Loader) batch() {
 		reqs = append(reqs, item)
 	}
 
-	c := make(chan []*Result)
-	go func(channel chan []*Result) {
-		channel <- l.batchFn(keys)
-	}(c)
-	items := <-c
+	items := l.batchFn(keys)
 
 	if len(items) != len(reqs) {
 		panic(fmt.Errorf("length of keys must match length of responses"))
 	}
 
 	for i, req := range reqs {
-		l.cache.Set(req.key, items[i].Data)
 		req.channel <- items[i]
 		close(req.channel)
 	}
@@ -210,34 +220,4 @@ func (l *Loader) sleeper() {
 
 	close(l.input)
 	l.input = nil
-}
-
-func UniqueBatchFunc(fn BatchFunc) BatchFunc {
-	return func(keys []string) []*Result {
-		out := make([]*Result, len(keys), len(keys))
-		dict := make(map[string]int)
-		position := make([][]int, 0, len(keys))
-		var uniqueKeys []string
-		var idx int
-		for i, key := range keys {
-			if _, ok := dict[key]; !ok {
-				dict[key] = i
-				position = append(position, []int{i})
-				uniqueKeys = append(uniqueKeys, key)
-				idx++
-			} else {
-				position[dict[key]] = append(position[dict[key]], i)
-			}
-		}
-
-		results := fn(uniqueKeys)
-
-		for i, ids := range position {
-			for _, v := range ids {
-				out[v] = results[i]
-			}
-		}
-
-		return out
-	}
 }

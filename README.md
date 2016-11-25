@@ -21,7 +21,8 @@ cache := dataloader.NewCache()
 loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
 
 // Use loader
-result := <- loader.load("key1")
+future := loader.load("key1")
+result := future()
 if result.Error != nil {
   // handle data error
 }
