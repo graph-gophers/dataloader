@@ -84,12 +84,17 @@ func (l *Loader) Load(key string) Getter {
 		return v.(func() *Result)
 	}
 
-	var value *Result
+	var value struct {
+		value *Result
+		lock  sync.Mutex
+	}
 	getter := func() *Result {
+		value.lock.Lock()
+		defer value.lock.Unlock()
 		if v, ok := <-c; ok {
-			value = v
+			value.value = v
 		}
-		return value
+		return value.value
 	}
 
 	l.cache.Set(key, getter)
