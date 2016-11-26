@@ -56,7 +56,7 @@ type Loader struct {
 	// internal channel that is used to batch items
 	input chan *batchRequest
 	// input mutex
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 // type used to on input channel
@@ -88,12 +88,16 @@ func (l *Loader) Load(key string) Getter {
 		value *Result
 		lock  sync.Mutex
 	}
+
 	getter := func() *Result {
-		value.lock.Lock()
-		defer value.lock.Unlock()
 		if v, ok := <-c; ok {
+			value.lock.Lock()
 			value.value = v
+			value.lock.Unlock()
 		}
+
+		value.lock.RLock()
+		defer value.lock.RUnlock()
 		return value.value
 	}
 
