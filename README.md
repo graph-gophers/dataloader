@@ -9,14 +9,16 @@ This project is a work in progress. Feedback is encouraged.
 ## Usage
 ```go
 // setup batch function
-batchFn := func(keys []string) ([]dataloader.Result) {
+batchFn := func(keys []string) []dataloader.Result {
   var results []dataloader.Result
   // do some aync work to get data for specified keys
   // append to this list resolved values
   return results
 }
+
 // Setup Cache (could be any cache that implements `Cache` interface
 cache := dataloader.NewCache()
+
 // create Loader
 loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
 
@@ -36,5 +38,7 @@ This implementation contains a very basic cache that is intended only to be used
 > it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anyting.
 
 ## Examples
-Coming soon. For now it may be helpful to look at the test file.
+Coming soon. There are a few basic examples in the example folder.
 
+## TODO
+- Write Tests

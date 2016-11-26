@@ -36,7 +36,8 @@ func main() {
 	cache := &Cache{c}
 	loader := dataloader.NewBatchedLoader(batchFunc, time.Duration(16*time.Millisecond), cache, 0)
 
-	result := <-loader.Load("some key")
+	// immediately call the future function from loader
+	result := loader.Load("some key")()
 	if result.Error != nil {
 		// handle error
 	}

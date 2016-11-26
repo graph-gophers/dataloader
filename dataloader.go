@@ -17,20 +17,19 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(string) Getter
-	LoadMany([]string) GetterMany
+	Load(string) Future
+	LoadMany([]string) FutureMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
 }
 
-// BatchFunc is a Function, which when given an Array of keys (string), returns an array of `results`.
-// It's important the the length of the input keys must match the length of
-// the ouput results.
+// BatchFunc is a Function, which when given a Slice of keys (string), returns an slice of `results`.
+// It's important that the length of the input keys matches the length of the ouput results.
 type BatchFunc func([]string) []*Result
 
-// Result is the data structure that is primarily used by the BatchFunc. It contains the resolved data,
-// and any errors that may have occured while fetching the data.
+// Result is the data structure that is primarily used by the BatchFunc.
+// It contains the resolved data, and any errors that may have occured while fetching the data.
 type Result struct {
 	Data  interface{}
 	Error error
@@ -59,14 +58,13 @@ type Loader struct {
 	mu sync.RWMutex
 }
 
-// type used to on input channel
-type batchRequest struct {
-	key     string
-	channel chan *Result
-}
+// Future is a function that will block until the value it contins is resolved.
+// After the value it contians is resolved, this function will return the result.
+// This function can be called many times, much like a Promise is other languages.
+type Future func() *Result
 
-type Getter func() *Result
-type GetterMany func() *ResultMany
+// FutureMany is much like the Future func type but it contains a list of results.
+type FutureMany func() *ResultMany
 
 // NewBatchedLoader constructs a new Loader with given options
 func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
@@ -78,7 +76,7 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(key string) Getter {
+func (l *Loader) Load(key string) Future {
 	c := make(chan *Result, 1)
 	if v, ok := l.cache.Get(key); ok {
 		return v.(func() *Result)
@@ -86,7 +84,7 @@ func (l *Loader) Load(key string) Getter {
 
 	var value struct {
 		value *Result
-		lock  sync.Mutex
+		lock  sync.RWMutex
 	}
 
 	getter := func() *Result {
@@ -108,20 +106,8 @@ func (l *Loader) Load(key string) Getter {
 	return getter
 }
 
-// this help ensure that data return is in same order as data recieved
-type result struct {
-	*Result
-	index int
-}
-
-// this help match the error to the key of a specific index
-type resultError struct {
-	error
-	index int
-}
-
 // LoadMany loads mulitiple keys, returning a channel that will resolve to an array of values and an error
-func (l *Loader) LoadMany(keys []string) GetterMany {
+func (l *Loader) LoadMany(keys []string) FutureMany {
 	out := make(chan *ResultMany, 1)
 	c := make(chan *result, len(keys))
 
@@ -150,12 +136,20 @@ func (l *Loader) LoadMany(keys []string) GetterMany {
 		out <- &ResultMany{outputData, outputErrors}
 	}()
 
-	var value *ResultMany
+	var value struct {
+		value *ResultMany
+		lock  sync.RWMutex
+	}
+
 	getterMany := func() *ResultMany {
 		if v, ok := <-out; ok {
-			value = v
+			value.lock.Lock()
+			value.value = v
+			value.lock.Unlock()
 		}
-		return value
+		value.lock.RLock()
+		defer value.lock.RUnlock()
+		return value.value
 	}
 
 	return getterMany
@@ -178,9 +172,33 @@ func (l *Loader) ClearAll() Interface {
 // Returns self for method chaining
 func (l *Loader) Prime(key string, value interface{}) Interface {
 	if _, ok := l.cache.Get(key); !ok {
-		l.cache.Set(key, value)
+		future := func() *Result {
+			return &Result{
+				Data:  value,
+				Error: nil,
+			}
+		}
+		l.cache.Set(key, future)
 	}
 	return l
+}
+
+// type used to on input channel
+type batchRequest struct {
+	key     string
+	channel chan *Result
+}
+
+// this help ensure that data return is in same order as data recieved
+type result struct {
+	*Result
+	index int
+}
+
+// this help match the error to the key of a specific index
+type resultError struct {
+	error
+	index int
 }
 
 // queues item to be batched
@@ -224,6 +242,7 @@ func (l *Loader) batch() {
 func (l *Loader) sleeper() {
 	// this will move this goroutine to the back of the callstack
 	time.Sleep(1)
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
