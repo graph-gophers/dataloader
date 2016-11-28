@@ -1,98 +1,282 @@
 package dataloader
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
+	"reflect"
 	"strconv"
-	"sync"
 	"testing"
 )
 
-var ts *httptest.Server
-
-var data map[string]string
-var lock sync.Mutex
-
-func init() {
-	data = map[string]string{
-		"1":  "Audi",
-		"2":  "Bently",
-		"3":  "Chevy",
-		"4":  "Dodge",
-		"5":  "Ferrari",
-		"6":  "Ford",
-		"7":  "GM",
-		"8":  "Hyundai",
-		"9":  "Jeep",
-		"10": "Land Rover",
-	}
-
-	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var d []string
-		ids := r.URL.Query()["id"]
-		for _, id := range ids {
-			lock.Lock()
-			d = append(d, data[id])
-			lock.Unlock()
-		}
-		b, _ := json.MarshalIndent(d, "", "  ")
-		fmt.Fprintln(w, string(b))
-	}))
-}
-
-// the only thing we need is a batch function that follow this signature
-func batchUsers(keys []string) (results []*Result) {
-	var brands []string
-	v := url.Values{}
-	for _, key := range keys {
-		v.Add("id", key)
-	}
-	queryString := v.Encode()
-	res, err := http.Get(ts.URL + "?" + queryString)
-	if err != nil {
-		// do something
-	}
-	if err := json.NewDecoder(res.Body).Decode(&brands); err != nil {
-		// do something
-	}
-	for _, brand := range brands {
-		results = append(results, &Result{brand, nil})
-	}
-	return
-}
-
+///////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////
 func TestLoader(t *testing.T) {
-	cache := NewCache()
-	UserLoader := NewBatchedLoader(batchUsers, cache, 0)
+	t.Run("test Load method", func(t *testing.T) {
+		identityLoader, _ := IdLoader(0)
+		future := identityLoader.Load("1")
+		value := future()
+		if value.Data != "1" {
+			t.Error("load didn't return the right value")
+		}
+	})
 
-	UserLoader.Prime("cachedId", "TEST BRAND")
+	t.Run("test LoadMany method", func(t *testing.T) {
+		errorLoader, _ := ErrorLoader(0)
+		future := errorLoader.LoadMany([]string{"1", "2", "3"})
+		value := future()
+		if len(value.Error) != 3 {
+			t.Error("loadmany didn't return right number of errors")
+		}
+	})
 
-	future1 := UserLoader.Load("1")
-	future2 := UserLoader.Load("2")
-	future3 := UserLoader.Load("cachedId")
+	t.Run("test LoadMany method", func(t *testing.T) {
+		identityLoader, _ := IdLoader(0)
+		future := identityLoader.LoadMany([]string{"1", "2", "3"})
+		value := future()
+		results := value.Data
+		if results[0].(string) != "1" || results[1].(string) != "2" || results[2].(string) != "3" {
+			t.Error("loadmany didn't return the right value")
+		}
+	})
 
-	value1 := future1()
-	value2 := future2()
-	value3 := future3()
+	t.Run("batches many requests", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(0)
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("2")
 
-	// should be cached by this point
-	future4 := UserLoader.Load("1")
-	value4 := future4()
+		future1()
+		future2()
 
-	listFuture := UserLoader.LoadMany([]string{"3", "4"})
-	values := listFuture()
+		calls := *loadCalls
+		inner := []string{"1", "2"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not call batchFn in right order. Expected %#v, got %#v", expected, calls)
+		}
+	})
 
-	log.Printf("test1: %#v", value1)
-	log.Printf("test2: %#v", value2)
-	log.Printf("test3: %#v", value3)
-	log.Printf("test4: %#v", value4)
-	log.Printf("test many: %#v", values)
+	t.Run("panics if errors is wrong length", func(t *testing.T) {
+		badLoader, _ := BadLoader(0)
+		future1 := badLoader.Load("1")
+		future2 := badLoader.Load("2")
+
+		value1 := future1()
+		value2 := future2()
+
+		if value1.Error == nil && value2.Error == nil {
+			t.Errorf("batch method didn't send error for mismatched lengths")
+		}
+	})
+
+	t.Run("responds to max batch size", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(2)
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("2")
+		future3 := identityLoader.Load("3")
+
+		future1()
+		future2()
+		future3()
+
+		calls := *loadCalls
+		inner1 := []string{"1", "2"}
+		inner2 := []string{"3"}
+		expected := [][]string{inner1, inner2}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
+	t.Run("caches repeated requests", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(0)
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("1")
+
+		future1()
+		future2()
+
+		calls := *loadCalls
+		inner := []string{"1"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
+	t.Run("allows primed cache", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(0)
+		identityLoader.Prime("A", "Cached")
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("A")
+
+		future1()
+		value := future2()
+
+		calls := *loadCalls
+		inner := []string{"1"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+
+		if value.Data.(string) != "Cached" {
+			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value.Data)
+		}
+	})
+
+	t.Run("allows clear value in cache", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(0)
+		identityLoader.Prime("A", "Cached")
+		identityLoader.Prime("B", "B")
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Clear("A").Load("A")
+		future3 := identityLoader.Load("B")
+
+		future1()
+		value := future2()
+		future3()
+
+		calls := *loadCalls
+		inner := []string{"1", "A"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+
+		if value.Data.(string) != "A" {
+			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value.Data)
+		}
+	})
+
+	t.Run("allows clearAll values in cache", func(t *testing.T) {
+		identityLoader, loadCalls := IdLoader(0)
+		identityLoader.Prime("A", "Cached")
+		identityLoader.Prime("B", "B")
+
+		identityLoader.ClearAll()
+
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("A")
+		future3 := identityLoader.Load("B")
+
+		future1()
+		future2()
+		future3()
+
+		calls := *loadCalls
+		inner := []string{"1", "A", "B"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
+	t.Run("all methods on NoCache are Noops", func(t *testing.T) {
+		identityLoader, loadCalls := NoCacheLoader(0)
+		identityLoader.Prime("A", "Cached")
+		identityLoader.Prime("B", "B")
+
+		identityLoader.ClearAll()
+
+		future1 := identityLoader.Clear("1").Load("1")
+		future2 := identityLoader.Load("A")
+		future3 := identityLoader.Load("B")
+
+		future1()
+		future2()
+		future3()
+
+		calls := *loadCalls
+		inner := []string{"1", "A", "B"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
+	t.Run("no cache does not cache anything", func(t *testing.T) {
+		identityLoader, loadCalls := NoCacheLoader(0)
+		identityLoader.Prime("A", "Cached")
+		identityLoader.Prime("B", "B")
+
+		future1 := identityLoader.Load("1")
+		future2 := identityLoader.Load("A")
+		future3 := identityLoader.Load("B")
+
+		future1()
+		future2()
+		future3()
+
+		calls := *loadCalls
+		inner := []string{"1", "A", "B"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
 }
 
+// test helpers
+func IdLoader(max int) (*Loader, *[][]string) {
+	var loadCalls [][]string
+	cache := NewCache()
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		log.Printf("keys: %#v", keys)
+		var results []*Result
+		loadCalls = append(loadCalls, keys)
+		for _, key := range keys {
+			results = append(results, &Result{key, nil})
+		}
+		return results
+	}, cache, max)
+	return identityLoader, &loadCalls
+}
+func ErrorLoader(max int) (*Loader, *[][]string) {
+	var loadCalls [][]string
+	cache := NewCache()
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		log.Printf("keys: %#v", keys)
+		var results []*Result
+		loadCalls = append(loadCalls, keys)
+		for _, key := range keys {
+			results = append(results, &Result{key, fmt.Errorf("this is a test error")})
+		}
+		return results
+	}, cache, max)
+	return identityLoader, &loadCalls
+}
+func BadLoader(max int) (*Loader, *[][]string) {
+	var loadCalls [][]string
+	cache := NewCache()
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		log.Printf("keys: %#v", keys)
+		var results []*Result
+		loadCalls = append(loadCalls, keys)
+		results = append(results, &Result{keys[0], nil})
+		return results
+	}, cache, max)
+	return identityLoader, &loadCalls
+}
+func NoCacheLoader(max int) (*Loader, *[][]string) {
+	var loadCalls [][]string
+	cache := &NoCache{}
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		log.Printf("keys: %#v", keys)
+		var results []*Result
+		loadCalls = append(loadCalls, keys)
+		for _, key := range keys {
+			results = append(results, &Result{key, nil})
+		}
+		return results
+	}, cache, max)
+	return identityLoader, &loadCalls
+}
+
+///////////////////////////////////////////////////
+// Benchmarks
+///////////////////////////////////////////////////
 var a *Avg = &Avg{}
 
 func batchIdentity(keys []string) (results []*Result) {

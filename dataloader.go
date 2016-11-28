@@ -35,8 +35,7 @@ type Result struct {
 	Error error
 }
 
-// ResultMany is used by the loadMany method. It contains a list of resolved data and a list of erros
-// if any occured.
+// ResultMany is used by the loadMany method. It contains a list of resolved data and a list of erros // if any occured.
 type ResultMany struct {
 	Data  []interface{}
 	Error []error
@@ -51,11 +50,18 @@ type Loader struct {
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
 	cache Cache
+	// used to close the input channel early
+	close chan bool
+
+	// connt of queued up items
+	count int
+	// count mutex
+	countLock sync.Mutex
 
 	// internal channel that is used to batch items
 	input chan *batchRequest
 	// input mutex
-	mu sync.RWMutex
+	inputLock sync.Mutex
 }
 
 // Future is a function that will block until the value it contins is resolved.
@@ -72,6 +78,8 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 		batchFn: batchFn,
 		cache:   cache,
 		cap:     cap,
+		close:   make(chan bool),
+		count:   0,
 	}
 }
 
@@ -84,7 +92,7 @@ func (l *Loader) Load(key string) Future {
 
 	var value struct {
 		value *Result
-		lock  sync.RWMutex
+		lock  sync.Mutex
 	}
 
 	getter := func() *Result {
@@ -94,14 +102,30 @@ func (l *Loader) Load(key string) Future {
 			value.lock.Unlock()
 		}
 
-		value.lock.RLock()
-		defer value.lock.RUnlock()
 		return value.value
 	}
 
 	l.cache.Set(key, getter)
 	req := &batchRequest{key, c}
-	l.addToQueue(req)
+
+	if l.input == nil {
+		l.inputLock.Lock()
+		l.input = make(chan *batchRequest, l.cap)
+		l.inputLock.Unlock()
+		go l.batch()
+	} else {
+
+	}
+
+	l.input <- req
+
+	l.countLock.Lock()
+	l.count = l.count + 1
+	l.countLock.Unlock()
+
+	if l.cap > 0 && l.count >= l.cap {
+		l.close <- true
+	}
 
 	return getter
 }
@@ -138,7 +162,7 @@ func (l *Loader) LoadMany(keys []string) FutureMany {
 
 	var value struct {
 		value *ResultMany
-		lock  sync.RWMutex
+		lock  sync.Mutex
 	}
 
 	getterMany := func() *ResultMany {
@@ -147,8 +171,7 @@ func (l *Loader) LoadMany(keys []string) FutureMany {
 			value.value = v
 			value.lock.Unlock()
 		}
-		value.lock.RLock()
-		defer value.lock.RUnlock()
+
 		return value.value
 	}
 
@@ -201,19 +224,6 @@ type resultError struct {
 	index int
 }
 
-// queues item to be batched
-func (l *Loader) addToQueue(req *batchRequest) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.input == nil {
-		l.input = make(chan *batchRequest, l.cap)
-		go l.batch()
-	}
-
-	l.input <- req
-}
-
 // execuite the batch of all items in queue
 func (l *Loader) batch() {
 	var keys []string
@@ -229,23 +239,33 @@ func (l *Loader) batch() {
 	items := l.batchFn(keys)
 
 	if len(items) != len(reqs) {
-		panic(fmt.Errorf("length of keys must match length of responses"))
+		for _, req := range reqs {
+			req.channel <- &Result{
+				Error: fmt.Errorf("length of keys must match length of responses"),
+				Data:  nil,
+			}
+			close(req.channel)
+		}
+	} else {
+		for i, req := range reqs {
+			req.channel <- items[i]
+			close(req.channel)
+		}
 	}
 
-	for i, req := range reqs {
-		req.channel <- items[i]
-		close(req.channel)
-	}
 }
 
 // wait the appropriate amount of time for next batch
 func (l *Loader) sleeper() {
-	// this will move this goroutine to the back of the callstack
-	time.Sleep(1)
+	select {
+	// used by batch to close early. usually triggered by max batch size
+	case <-l.close:
+	// this will move this goroutine to the back of the callstack?
+	case <-time.After(100 * time.Millisecond):
+	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+	l.inputLock.Lock()
 	close(l.input)
 	l.input = nil
+	l.inputLock.Unlock()
 }
