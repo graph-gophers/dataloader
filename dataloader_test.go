@@ -223,7 +223,6 @@ func IdLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
-		log.Printf("keys: %#v", keys)
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
 		for _, key := range keys {
@@ -237,7 +236,6 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
-		log.Printf("keys: %#v", keys)
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
 		for _, key := range keys {
@@ -251,7 +249,6 @@ func BadLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
-		log.Printf("keys: %#v", keys)
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
 		results = append(results, &Result{keys[0], nil})
@@ -263,7 +260,6 @@ func NoCacheLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	cache := &NoCache{}
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
-		log.Printf("keys: %#v", keys)
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
 		for _, key := range keys {
