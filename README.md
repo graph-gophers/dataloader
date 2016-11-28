@@ -1,5 +1,6 @@
 # DataLoader
 [![GoDoc](https://godoc.org/github.com/nicksrandall/dataloader?status.svg)](https://godoc.org/github.com/nicksrandall/dataloader)
+[![Build Status](https://travis-ci.org/nicksrandall/dataloader.svg?branch=master)](https://travis-ci.org/nicksrandall/dataloader)
 
 This is an implementation of [Facebook's DataLoader](https://github.com/facebook/dataloader) in Golang.
 
