@@ -17,8 +17,8 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(string) Future
-	LoadMany([]string) FutureMany
+	Load(string) Thunk
+	LoadMany([]string) ThunkMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
@@ -51,7 +51,7 @@ type Loader struct {
 	// implementation could be used as long as it implements the `Cache` interface.
 	cache Cache
 	// used to close the input channel early
-	close chan bool
+	forceStartBatch chan bool
 
 	// connt of queued up items
 	count int
@@ -67,24 +67,24 @@ type Loader struct {
 // Future is a function that will block until the value it contins is resolved.
 // After the value it contians is resolved, this function will return the result.
 // This function can be called many times, much like a Promise is other languages.
-type Future func() *Result
+type Thunk func() *Result
 
 // FutureMany is much like the Future func type but it contains a list of results.
-type FutureMany func() *ResultMany
+type ThunkMany func() *ResultMany
 
 // NewBatchedLoader constructs a new Loader with given options
 func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 	return &Loader{
-		batchFn: batchFn,
-		cache:   cache,
-		cap:     cap,
-		close:   make(chan bool),
-		count:   0,
+		batchFn:         batchFn,
+		cache:           cache,
+		cap:             cap,
+		forceStartBatch: make(chan bool),
+		count:           0,
 	}
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(key string) Future {
+func (l *Loader) Load(key string) Thunk {
 	c := make(chan *Result, 1)
 	if v, ok := l.cache.Get(key); ok {
 		return v.(func() *Result)
@@ -95,7 +95,7 @@ func (l *Loader) Load(key string) Future {
 		lock  sync.Mutex
 	}
 
-	getter := func() *Result {
+	thunk := func() *Result {
 		if v, ok := <-c; ok {
 			value.lock.Lock()
 			value.value = v
@@ -105,7 +105,7 @@ func (l *Loader) Load(key string) Future {
 		return value.value
 	}
 
-	l.cache.Set(key, getter)
+	l.cache.Set(key, thunk)
 	req := &batchRequest{key, c}
 
 	if l.input == nil {
@@ -124,14 +124,14 @@ func (l *Loader) Load(key string) Future {
 	l.countLock.Unlock()
 
 	if l.cap > 0 && l.count >= l.cap {
-		l.close <- true
+		l.forceStartBatch <- true
 	}
 
-	return getter
+	return thunk
 }
 
 // LoadMany loads mulitiple keys, returning a channel that will resolve to an array of values and an error
-func (l *Loader) LoadMany(keys []string) FutureMany {
+func (l *Loader) LoadMany(keys []string) ThunkMany {
 	out := make(chan *ResultMany, 1)
 	c := make(chan *result, len(keys))
 
@@ -165,7 +165,7 @@ func (l *Loader) LoadMany(keys []string) FutureMany {
 		lock  sync.Mutex
 	}
 
-	getterMany := func() *ResultMany {
+	thunkMany := func() *ResultMany {
 		if v, ok := <-out; ok {
 			value.lock.Lock()
 			value.value = v
@@ -175,7 +175,7 @@ func (l *Loader) LoadMany(keys []string) FutureMany {
 		return value.value
 	}
 
-	return getterMany
+	return thunkMany
 }
 
 // Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
@@ -259,7 +259,7 @@ func (l *Loader) batch() {
 func (l *Loader) sleeper() {
 	select {
 	// used by batch to close early. usually triggered by max batch size
-	case <-l.close:
+	case <-l.forceStartBatch:
 	// this will move this goroutine to the back of the callstack?
 	case <-time.After(100 * time.Millisecond):
 	}
