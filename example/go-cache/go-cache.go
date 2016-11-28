@@ -34,7 +34,7 @@ func main() {
 	// go-cache will automaticlly cleanup expired items on given diration
 	c := cache.New(time.Duration(15*time.Minute), time.Duration(15*time.Minute))
 	cache := &Cache{c}
-	loader := dataloader.NewBatchedLoader(batchFunc, time.Duration(16*time.Millisecond), cache, 0)
+	loader := dataloader.NewBatchedLoader(batchFunc, cache, 0)
 
 	// immediately call the future function from loader
 	result := loader.Load("some key")()
@@ -45,11 +45,11 @@ func main() {
 	fmt.Printf("identity: %s\n", result.Data)
 }
 
-func batchFunc(keys []string) []dataloader.Result {
-	var results []dataloader.Result
+func batchFunc(keys []string) []*dataloader.Result {
+	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, dataloader.Result{key, nil})
+		results = append(results, &dataloader.Result{key, nil})
 	}
 	return results
 }
