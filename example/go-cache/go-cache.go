@@ -14,11 +14,15 @@ type Cache struct {
 	c *cache.Cache
 }
 
-func (c *Cache) Get(key string) (Thunk, bool) {
-	return c.c.Get(key).(Thunk)
+func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
+	v, ok := c.c.Get(key)
+	if ok {
+		return v.(dataloader.Thunk), ok
+	}
+	return nil, ok
 }
 
-func (c *Cache) Set(key string, value Thunk) {
+func (c *Cache) Set(key string, value dataloader.Thunk) {
 	c.c.Set(key, value, 0)
 }
 
