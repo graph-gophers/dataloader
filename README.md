@@ -29,7 +29,7 @@ loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
  * A thunk is a closure over a value (in this case a result struct).
  * When called, it will block until the value is resolved.
  */
-thunk := loader.load("key1")
+thunk := loader.Load("key1")
 result := thunk()
 if result.Error != nil {
   // handle data error
