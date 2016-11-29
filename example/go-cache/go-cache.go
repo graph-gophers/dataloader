@@ -14,11 +14,11 @@ type Cache struct {
 	c *cache.Cache
 }
 
-func (c *Cache) Get(key string) (interface{}, bool) {
-	return c.c.Get(key)
+func (c *Cache) Get(key string) (Thunk, bool) {
+	return c.c.Get(key).(Thunk)
 }
 
-func (c *Cache) Set(key string, value interface{}) {
+func (c *Cache) Set(key string, value Thunk) {
 	c.c.Set(key, value, 0)
 }
 

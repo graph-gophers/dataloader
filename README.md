@@ -23,7 +23,12 @@ cache := dataloader.NewCache()
 // create Loader
 loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
 
-// Use loader
+/**
+ * Use loader
+ *
+ * A thunk is a closure over a value (in this case a result struct).
+ * When called, it will block until the value is resolved.
+ */
 thunk := loader.load("key1")
 result := thunk()
 if result.Error != nil {

@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const inputCap int = 10
+
 // A `DataLoader` Interface defines a public API for loading data from a particular
 // data back-end with unique keys such as the `id` column of a SQL table or
 // document name in a MongoDB database, given a batch loading function.
@@ -54,14 +56,13 @@ type Loader struct {
 	forceStartBatch chan bool
 
 	// connt of queued up items
-	count int
-	// count mutex
 	countLock sync.Mutex
+	count     int
 
 	// internal channel that is used to batch items
-	input chan *batchRequest
-	// input mutex
-	inputLock sync.Mutex
+	inputLock sync.RWMutex
+	input     chan *batchRequest
+	batching  bool
 }
 
 // Future is a function that will block until the value it contins is resolved.
@@ -80,6 +81,7 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 		cap:             cap,
 		forceStartBatch: make(chan bool),
 		count:           0,
+		input:           make(chan *batchRequest, inputCap),
 	}
 }
 
@@ -87,7 +89,7 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 func (l *Loader) Load(key string) Thunk {
 	c := make(chan *Result, 1)
 	if v, ok := l.cache.Get(key); ok {
-		return v.(func() *Result)
+		return v
 	}
 
 	var value struct {
@@ -108,16 +110,16 @@ func (l *Loader) Load(key string) Thunk {
 	l.cache.Set(key, thunk)
 	req := &batchRequest{key, c}
 
-	if l.input == nil {
+	if !l.batching {
 		l.inputLock.Lock()
-		l.input = make(chan *batchRequest, l.cap)
+		l.batching = true
 		l.inputLock.Unlock()
 		go l.batch()
-	} else {
-
 	}
 
+	l.inputLock.RLock()
 	l.input <- req
+	l.inputLock.RUnlock()
 
 	l.countLock.Lock()
 	l.count = l.count + 1
@@ -266,6 +268,7 @@ func (l *Loader) sleeper() {
 
 	l.inputLock.Lock()
 	close(l.input)
-	l.input = nil
+	l.input = make(chan *batchRequest, inputCap)
+	l.batching = false
 	l.inputLock.Unlock()
 }

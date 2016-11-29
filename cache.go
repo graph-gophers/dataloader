@@ -4,8 +4,8 @@ import "sync"
 
 // If a custom cache is provided, it must implement this interface.
 type Cache interface {
-	Get(string) (interface{}, bool)
-	Set(string, interface{})
+	Get(string) (Thunk, bool)
+	Set(string, Thunk)
 	Delete(string)
 	Clear()
 }
@@ -16,20 +16,20 @@ type Cache interface {
 // for the life of an http request) but it not well suited
 // for long lived cached items.
 type InMemoryCache struct {
-	items map[string]interface{}
+	items map[string]Thunk
 	mu    sync.RWMutex
 }
 
 // NewCache constructs a new InMemoryCache
 func NewCache() *InMemoryCache {
-	items := make(map[string]interface{})
+	items := make(map[string]Thunk)
 	return &InMemoryCache{
 		items: items,
 	}
 }
 
 // sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(key string, value interface{}) {
+func (c *InMemoryCache) Set(key string, value Thunk) {
 	c.mu.Lock()
 	c.items[key] = value
 	c.mu.Unlock()
@@ -37,7 +37,7 @@ func (c *InMemoryCache) Set(key string, value interface{}) {
 
 // gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(key string) (interface{}, bool) {
+func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 	c.mu.RLock()
 
 	item, found := c.items[key]
@@ -60,7 +60,7 @@ func (c *InMemoryCache) Delete(key string) {
 // clears the entire cache
 func (c *InMemoryCache) Clear() {
 	c.mu.Lock()
-	c.items = map[string]interface{}{}
+	c.items = map[string]Thunk{}
 	c.mu.Unlock()
 }
 
@@ -69,7 +69,7 @@ func (c *InMemoryCache) Clear() {
 // want to use a data loader
 type NoCache struct{}
 
-func (c *NoCache) Get(string) (interface{}, bool) { return nil, false }
-func (c *NoCache) Set(string, interface{})        { return }
-func (c *NoCache) Delete(string)                  { return }
-func (c *NoCache) Clear()                         { return }
+func (c *NoCache) Get(string) (Thunk, bool) { return nil, false }
+func (c *NoCache) Set(string, Thunk)        { return }
+func (c *NoCache) Delete(string)            { return }
+func (c *NoCache) Clear()                   { return }
