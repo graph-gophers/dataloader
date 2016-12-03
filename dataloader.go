@@ -51,7 +51,8 @@ type Loader struct {
 	cap int
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
-	cache Cache
+	cacheLock sync.Mutex
+	cache     Cache
 	// used to close the input channel early
 	forceStartBatch chan bool
 
@@ -87,13 +88,15 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
 func (l *Loader) Load(key string) Thunk {
+	var value *Result
 	c := make(chan *Result, l.cap)
 	cond := sync.NewCond(&sync.Mutex{})
+
+	l.cacheLock.Lock()
 	if v, ok := l.cache.Get(key); ok {
+		defer l.cacheLock.Unlock()
 		return v
 	}
-
-	var value *Result
 
 	thunk := func() *Result {
 		cond.L.Lock()
@@ -103,8 +106,9 @@ func (l *Loader) Load(key string) Thunk {
 		}
 		return value
 	}
-
 	l.cache.Set(key, thunk)
+	l.cacheLock.Unlock()
+
 	req := &batchRequest{key, c}
 
 	if !l.batching {

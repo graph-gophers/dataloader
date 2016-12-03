@@ -16,7 +16,6 @@ func TestLoader(t *testing.T) {
 		identityLoader, _ := IdLoader(0)
 		future := identityLoader.Load("1")
 		value := future()
-		log.Printf("value: %#v", value)
 		if value.Data != "1" {
 			t.Error("load didn't return the right value")
 		}
@@ -46,7 +45,6 @@ func TestLoader(t *testing.T) {
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
 
-		log.Println("loaded both futures")
 		future1()
 		future2()
 
