@@ -87,24 +87,21 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
 func (l *Loader) Load(key string) Thunk {
-	c := make(chan *Result, 1)
+	c := make(chan *Result, l.cap)
+	cond := sync.NewCond(&sync.Mutex{})
 	if v, ok := l.cache.Get(key); ok {
 		return v
 	}
 
-	var value struct {
-		value *Result
-		lock  sync.Mutex
-	}
+	var value *Result
 
 	thunk := func() *Result {
-		if v, ok := <-c; ok {
-			value.lock.Lock()
-			value.value = v
-			value.lock.Unlock()
+		cond.L.Lock()
+		defer cond.L.Unlock()
+		if value == nil {
+			cond.Wait()
 		}
-
-		return value.value
+		return value
 	}
 
 	l.cache.Set(key, thunk)
@@ -129,6 +126,16 @@ func (l *Loader) Load(key string) Thunk {
 		l.forceStartBatch <- true
 	}
 
+	defer func() {
+		go func() {
+			select {
+			case result := <-c:
+				value = result
+				cond.Broadcast()
+			}
+		}()
+	}()
+
 	return thunk
 }
 
@@ -149,6 +156,11 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		var i int = 1
 		outputData := make([]interface{}, len(keys), len(keys))
 		outputErrors := make([]error, 0, len(keys))
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered in f", r)
+			}
+		}()
 		for result := range c {
 			outputData[result.index] = result.Data
 			if result.Error != nil {
