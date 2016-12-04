@@ -18,7 +18,7 @@ batchFn := func(keys []string) []dataloader.Result {
   return results
 }
 
-// Setup Cache (could be any cache that implements `Cache` interface
+// Setup Cache (could be any cache that implements `Cache` interface)
 cache := dataloader.NewCache()
 
 // create Loader
@@ -27,7 +27,8 @@ loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
 /**
  * Use loader
  *
- * A thunk is a closure over a value (in this case a result struct).
+ * A thunk is a function returned from a function that is a 
+ * closure over a value (in this case a `Result` struct).
  * When called, it will block until the value is resolved.
  */
 thunk := loader.Load("key1")
@@ -45,7 +46,7 @@ This implementation contains a very basic cache that is intended only to be used
 > it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anyting.
 
 ## Examples
-Coming soon. There are a few basic examples in the example folder.
+There are a few basic examples in the example folder. More coming soon!
 
 ## TODO
-- Write *More* Tests
+- Write **More** Tests

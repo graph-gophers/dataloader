@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-const inputCap int = 10
+// the buffer amount fot the input channel.
+// I wish we had unbounded channels
+const inputCap int = 10000
 
 // A `DataLoader` Interface defines a public API for loading data from a particular
 // data back-end with unique keys such as the `id` column of a SQL table or
@@ -26,11 +28,13 @@ type Interface interface {
 	Prime(key string, value interface{}) Interface
 }
 
-// BatchFunc is a Function, which when given a Slice of keys (string), returns an slice of `results`.
+// BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
 // It's important that the length of the input keys matches the length of the ouput results.
+//
+// The keys passed to this function are garenteed to be unique
 type BatchFunc func([]string) []*Result
 
-// Result is the data structure that is primarily used by the BatchFunc.
+// Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occured while fetching the data.
 type Result struct {
 	Data  interface{}
@@ -38,6 +42,7 @@ type Result struct {
 }
 
 // ResultMany is used by the loadMany method. It contains a list of resolved data and a list of erros // if any occured.
+// Errors will contain the index of the value that errored
 type ResultMany struct {
 	Data  []interface{}
 	Error []error
@@ -47,12 +52,15 @@ type ResultMany struct {
 type Loader struct {
 	// the batch function to be used by this loader
 	batchFn BatchFunc
+
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
 	cap int
+
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
 	cacheLock sync.Mutex
 	cache     Cache
+
 	// used to close the input channel early
 	forceStartBatch chan bool
 
@@ -66,13 +74,26 @@ type Loader struct {
 	batching  bool
 }
 
-// Future is a function that will block until the value it contins is resolved.
+// Thunk is a function that will block until the value (*Result) it contins is resolved.
 // After the value it contians is resolved, this function will return the result.
 // This function can be called many times, much like a Promise is other languages.
+// The value will only need to be resolved once so subsequent calls will return immediately.
 type Thunk func() *Result
 
-// FutureMany is much like the Future func type but it contains a list of results.
+// ThunkMany is much like the Thunk func type but it contains a list of results.
 type ThunkMany func() *ResultMany
+
+// type used to on input channel
+type batchRequest struct {
+	key     string
+	channel chan *Result
+}
+
+// this help match the error to the key of a specific index
+type resultError struct {
+	error
+	index int
+}
 
 // NewBatchedLoader constructs a new Loader with given options
 func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
@@ -92,6 +113,7 @@ func (l *Loader) Load(key string) Thunk {
 	c := make(chan *Result, l.cap)
 	cond := sync.NewCond(&sync.Mutex{})
 
+	// lock to prevent duplicate keys coming in before item has been added to cache.
 	l.cacheLock.Lock()
 	if v, ok := l.cache.Get(key); ok {
 		defer l.cacheLock.Unlock()
@@ -109,8 +131,11 @@ func (l *Loader) Load(key string) Thunk {
 	l.cache.Set(key, thunk)
 	l.cacheLock.Unlock()
 
+	// this is sent to batch fn. It contains the key and the channel to return the
+	// the result on
 	req := &batchRequest{key, c}
 
+	// start the batch window if it hasn't already started.
 	if !l.batching {
 		l.inputLock.Lock()
 		l.batching = true
@@ -118,18 +143,25 @@ func (l *Loader) Load(key string) Thunk {
 		go l.batch()
 	}
 
+	// this lock prevents sending on the channel at the same time that it is being closed.
 	l.inputLock.RLock()
 	l.input <- req
 	l.inputLock.RUnlock()
 
-	l.countLock.Lock()
-	l.count = l.count + 1
-	l.countLock.Unlock()
+	// if we need to keep track of the count (max batch), then do so.
+	if l.cap > 0 {
+		l.countLock.Lock()
+		l.count = l.count + 1
+		l.countLock.Unlock()
 
-	if l.cap > 0 && l.count >= l.cap {
-		l.forceStartBatch <- true
+		// if we hit our limit, force the batch to start
+		if l.count == l.cap {
+			l.forceStartBatch <- true
+		}
 	}
 
+	// in a new thread, wait for value to be resolved and then wake up any
+	// thunks that are waiting on it.
 	defer func() {
 		go func() {
 			select {
@@ -143,55 +175,45 @@ func (l *Loader) Load(key string) Thunk {
 	return thunk
 }
 
-// LoadMany loads mulitiple keys, returning a channel that will resolve to an array of values and an error
+// LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
 func (l *Loader) LoadMany(keys []string) ThunkMany {
-	out := make(chan *ResultMany, 1)
-	c := make(chan *result, len(keys))
+	length := len(keys)
+	data := make([]interface{}, length)
+	errors := make([]error, 0, length)
+	wg := sync.WaitGroup{}
+	cond := sync.NewCond(&sync.Mutex{})
 
+	wg.Add(length)
 	for i := range keys {
 		go func(i int) {
-			getter := l.Load(keys[i])
-			c <- &result{getter(), i}
+			defer wg.Done()
+			thunk := l.Load(keys[i])
+			result := thunk()
+			if result.Error != nil {
+				errors = append(errors, resultError{result.Error, i})
+			}
+			data[i] = result.Data
 		}(i)
 	}
 
-	go func() {
-		defer close(out)
-		var i int = 1
-		outputData := make([]interface{}, len(keys), len(keys))
-		outputErrors := make([]error, 0, len(keys))
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("Recovered in f", r)
-			}
-		}()
-		for result := range c {
-			outputData[result.index] = result.Data
-			if result.Error != nil {
-				outputErrors = append(outputErrors, resultError{result.Error, result.index})
-			}
-			if i == len(keys) {
-				close(c)
-			}
-			i++
-		}
-		out <- &ResultMany{outputData, outputErrors}
-	}()
-
-	var value struct {
-		value *ResultMany
-		lock  sync.Mutex
-	}
+	var value *ResultMany
 
 	thunkMany := func() *ResultMany {
-		if v, ok := <-out; ok {
-			value.lock.Lock()
-			value.value = v
-			value.lock.Unlock()
+		cond.L.Lock()
+		defer cond.L.Unlock()
+		if value == nil {
+			cond.Wait()
 		}
-
-		return value.value
+		return value
 	}
+
+	defer func() {
+		go func() {
+			wg.Wait()
+			value = &ResultMany{data, errors}
+			cond.Broadcast()
+		}()
+	}()
 
 	return thunkMany
 }
@@ -203,7 +225,7 @@ func (l *Loader) Clear(key string) Interface {
 }
 
 // ClearAll clears the entire cache. To be used when some event results in unknown invalidations.
-// Returs self for method chaining.
+// Returns self for method chaining.
 func (l *Loader) ClearAll() Interface {
 	l.cache.Clear()
 	return l
@@ -222,24 +244,6 @@ func (l *Loader) Prime(key string, value interface{}) Interface {
 		l.cache.Set(key, future)
 	}
 	return l
-}
-
-// type used to on input channel
-type batchRequest struct {
-	key     string
-	channel chan *Result
-}
-
-// this help ensure that data return is in same order as data recieved
-type result struct {
-	*Result
-	index int
-}
-
-// this help match the error to the key of a specific index
-type resultError struct {
-	error
-	index int
 }
 
 // execuite the batch of all items in queue
