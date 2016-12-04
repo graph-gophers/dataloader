@@ -31,7 +31,7 @@ type Interface interface {
 // BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
 // It's important that the length of the input keys matches the length of the ouput results.
 //
-// The keys passed to this function are garenteed to be unique
+// The keys passed to this function are guaranteed to be unique
 type BatchFunc func([]string) []*Result
 
 // Result is the data structure that a BatchFunc returns.
