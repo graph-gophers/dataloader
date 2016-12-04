@@ -3,7 +3,7 @@
 package dataloader
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 )
@@ -263,7 +263,7 @@ func (l *Loader) batch() {
 	if len(items) != len(reqs) {
 		for _, req := range reqs {
 			req.channel <- &Result{
-				Error: fmt.Errorf("length of keys must match length of responses"),
+				Error: errors.New("length of keys must match length of responses"),
 				Data:  nil,
 			}
 			close(req.channel)
