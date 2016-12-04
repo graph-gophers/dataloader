@@ -2,7 +2,7 @@ package dataloader
 
 import "sync"
 
-// If a custom cache is provided, it must implement this interface.
+// The Cache interface. If a custom cache is provided, it must implement this interface.
 type Cache interface {
 	Get(string) (Thunk, bool)
 	Set(string, Thunk)
@@ -10,7 +10,7 @@ type Cache interface {
 	Clear()
 }
 
-// In memory implementation of Cache interace.
+// InMemeoryCache is an in memory implementation of Cache interace.
 // this simple implementation is well suited for
 // a "per-request" dataloader (i.e. one that only lives
 // for the life of an http request) but it not well suited
@@ -28,14 +28,14 @@ func NewCache() *InMemoryCache {
 	}
 }
 
-// sets the `value` at `key` in the cache
+// Set sets the `value` at `key` in the cache
 func (c *InMemoryCache) Set(key string, value Thunk) {
 	c.mu.Lock()
 	c.items[key] = value
 	c.mu.Unlock()
 }
 
-// gets the value at `key` if it exsits, returns value (or nil) and bool
+// Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
 func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 	c.mu.RLock()
@@ -50,14 +50,14 @@ func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 	return item, true
 }
 
-// deletes item at `key` from cache
+// Delele deletes item at `key` from cache
 func (c *InMemoryCache) Delete(key string) {
 	c.mu.Lock()
 	delete(c.items, key)
 	c.mu.Unlock()
 }
 
-// clears the entire cache
+// Clear clears the entire cache
 func (c *InMemoryCache) Clear() {
 	c.mu.Lock()
 	c.items = map[string]Thunk{}
@@ -69,7 +69,14 @@ func (c *InMemoryCache) Clear() {
 // want to use a data loader
 type NoCache struct{}
 
+// Get is a NOOP
 func (c *NoCache) Get(string) (Thunk, bool) { return nil, false }
-func (c *NoCache) Set(string, Thunk)        { return }
-func (c *NoCache) Delete(string)            { return }
-func (c *NoCache) Clear()                   { return }
+
+// Set is a NOOP
+func (c *NoCache) Set(string, Thunk) { return }
+
+// Delete is a NOOP
+func (c *NoCache) Delete(string) { return }
+
+// Clear is a NOOP
+func (c *NoCache) Clear() { return }

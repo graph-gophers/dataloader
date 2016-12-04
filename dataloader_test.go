@@ -13,7 +13,7 @@ import (
 ///////////////////////////////////////////////////
 func TestLoader(t *testing.T) {
 	t.Run("test Load method", func(t *testing.T) {
-		identityLoader, _ := IdLoader(0)
+		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
 		value := future()
 		if value.Data != "1" {
@@ -31,7 +31,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("test LoadMany method", func(t *testing.T) {
-		identityLoader, _ := IdLoader(0)
+		identityLoader, _ := IDLoader(0)
 		future := identityLoader.LoadMany([]string{"1", "2", "3"})
 		value := future()
 		results := value.Data
@@ -41,7 +41,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("batches many requests", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(0)
+		identityLoader, loadCalls := IDLoader(0)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
 
@@ -70,7 +70,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("responds to max batch size", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(2)
+		identityLoader, loadCalls := IDLoader(2)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
 		future3 := identityLoader.Load("3")
@@ -89,7 +89,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("caches repeated requests", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(0)
+		identityLoader, loadCalls := IDLoader(0)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("1")
 
@@ -105,7 +105,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows primed cache", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(0)
+		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("A")
@@ -126,7 +126,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows clear value in cache", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(0)
+		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
 		future1 := identityLoader.Load("1")
@@ -150,7 +150,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows clearAll values in cache", func(t *testing.T) {
-		identityLoader, loadCalls := IdLoader(0)
+		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
 
@@ -219,7 +219,7 @@ func TestLoader(t *testing.T) {
 }
 
 // test helpers
-func IdLoader(max int) (*Loader, *[][]string) {
+func IDLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
@@ -273,7 +273,7 @@ func NoCacheLoader(max int) (*Loader, *[][]string) {
 ///////////////////////////////////////////////////
 // Benchmarks
 ///////////////////////////////////////////////////
-var a *Avg = &Avg{}
+var a = &Avg{}
 
 func batchIdentity(keys []string) (results []*Result) {
 	a.Add(len(keys))
@@ -300,7 +300,7 @@ type Avg struct {
 
 func (a *Avg) Add(v int) {
 	a.total += float64(v)
-	a.length += 1
+	a.length++
 }
 
 func (a *Avg) Avg() float64 {

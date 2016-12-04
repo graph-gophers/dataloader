@@ -1,4 +1,4 @@
-// dataloader is an implimentation of facebook's dataloader in go.
+// Package dataloader is an implimentation of facebook's dataloader in go.
 // See https://github.com/facebook/dataloader for more information
 package dataloader
 
@@ -12,7 +12,7 @@ import (
 // I wish we had unbounded channels
 const inputCap int = 10000
 
-// A `DataLoader` Interface defines a public API for loading data from a particular
+// Interface is a `DataLoader` Interface which defines a public API for loading data from a particular
 // data back-end with unique keys such as the `id` column of a SQL table or
 // document name in a MongoDB database, given a batch loading function.
 //
@@ -48,7 +48,7 @@ type ResultMany struct {
 	Error []error
 }
 
-// Implements the dataloader.Interface.
+// Loader implements the dataloader.Interface.
 type Loader struct {
 	// the batch function to be used by this loader
 	batchFn BatchFunc
@@ -231,7 +231,7 @@ func (l *Loader) ClearAll() Interface {
 	return l
 }
 
-// Adds the provided key and value to the cache. If the key already exists, no change is made.
+// Prime adds the provided key and value to the cache. If the key already exists, no change is made.
 // Returns self for method chaining
 func (l *Loader) Prime(key string, value interface{}) Interface {
 	if _, ok := l.cache.Get(key); !ok {
