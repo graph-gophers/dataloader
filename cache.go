@@ -10,7 +10,7 @@ type Cache interface {
 	Clear()
 }
 
-// InMemeoryCache is an in memory implementation of Cache interace.
+// InMemoryCache is an in memory implementation of Cache interace.
 // this simple implementation is well suited for
 // a "per-request" dataloader (i.e. one that only lives
 // for the life of an http request) but it not well suited
@@ -50,7 +50,7 @@ func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 	return item, true
 }
 
-// Delele deletes item at `key` from cache
+// Delete deletes item at `key` from cache
 func (c *InMemoryCache) Delete(key string) {
 	c.mu.Lock()
 	delete(c.items, key)
