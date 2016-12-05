@@ -56,19 +56,6 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("panics if errors is wrong length", func(t *testing.T) {
-		badLoader, _ := BadLoader(0)
-		future1 := badLoader.Load("1")
-		future2 := badLoader.Load("2")
-
-		value1 := future1()
-		value2 := future2()
-
-		if value1.Error == nil && value2.Error == nil {
-			t.Errorf("batch method didn't send error for mismatched lengths")
-		}
-	})
-
 	t.Run("responds to max batch size", func(t *testing.T) {
 		identityLoader, loadCalls := IDLoader(2)
 		future1 := identityLoader.Load("1")

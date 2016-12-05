@@ -3,14 +3,13 @@
 package dataloader
 
 import (
-	"errors"
 	"sync"
 	"time"
 )
 
 // the buffer amount fot the input channel.
 // I wish we had unbounded channels
-const inputCap int = 10000
+var inputCap int = 1000
 
 // Interface is a `DataLoader` Interface which defines a public API for loading data from a particular
 // data back-end with unique keys such as the `id` column of a SQL table or
@@ -111,7 +110,6 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 func (l *Loader) Load(key string) Thunk {
 	var value *Result
 	c := make(chan *Result, l.cap)
-	cond := sync.NewCond(&sync.Mutex{})
 
 	// lock to prevent duplicate keys coming in before item has been added to cache.
 	l.cacheLock.Lock()
@@ -121,13 +119,12 @@ func (l *Loader) Load(key string) Thunk {
 	}
 
 	thunk := func() *Result {
-		cond.L.Lock()
-		defer cond.L.Unlock()
 		if value == nil {
-			cond.Wait()
+			value = <-c
 		}
 		return value
 	}
+
 	l.cache.Set(key, thunk)
 	l.cacheLock.Unlock()
 
@@ -151,7 +148,7 @@ func (l *Loader) Load(key string) Thunk {
 	// if we need to keep track of the count (max batch), then do so.
 	if l.cap > 0 {
 		l.countLock.Lock()
-		l.count = l.count + 1
+		l.count++
 		l.countLock.Unlock()
 
 		// if we hit our limit, force the batch to start
@@ -159,18 +156,6 @@ func (l *Loader) Load(key string) Thunk {
 			l.forceStartBatch <- true
 		}
 	}
-
-	// in a new thread, wait for value to be resolved and then wake up any
-	// thunks that are waiting on it.
-	defer func() {
-		go func() {
-			select {
-			case result := <-c:
-				value = result
-				cond.Broadcast()
-			}
-		}()
-	}()
 
 	return thunk
 }
@@ -180,8 +165,8 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	length := len(keys)
 	data := make([]interface{}, length)
 	errors := make([]error, 0, length)
+	c := make(chan *ResultMany, 1)
 	wg := sync.WaitGroup{}
-	cond := sync.NewCond(&sync.Mutex{})
 
 	wg.Add(length)
 	for i := range keys {
@@ -196,24 +181,20 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		}(i)
 	}
 
+	go func() {
+		wg.Wait()
+		c <- &ResultMany{data, errors}
+		close(c)
+	}()
+
 	var value *ResultMany
 
 	thunkMany := func() *ResultMany {
-		cond.L.Lock()
-		defer cond.L.Unlock()
 		if value == nil {
-			cond.Wait()
+			value = <-c
 		}
 		return value
 	}
-
-	defer func() {
-		go func() {
-			wg.Wait()
-			value = &ResultMany{data, errors}
-			cond.Broadcast()
-		}()
-	}()
 
 	return thunkMany
 }
@@ -260,21 +241,10 @@ func (l *Loader) batch() {
 
 	items := l.batchFn(keys)
 
-	if len(items) != len(reqs) {
-		for _, req := range reqs {
-			req.channel <- &Result{
-				Error: errors.New("length of keys must match length of responses"),
-				Data:  nil,
-			}
-			close(req.channel)
-		}
-	} else {
-		for i, req := range reqs {
-			req.channel <- items[i]
-			close(req.channel)
-		}
+	for i, req := range reqs {
+		req.channel <- items[i]
+		close(req.channel)
 	}
-
 }
 
 // wait the appropriate amount of time for next batch
@@ -286,6 +256,7 @@ func (l *Loader) sleeper() {
 	case <-time.After(10 * time.Millisecond):
 	}
 
+	// reset
 	l.inputLock.Lock()
 	close(l.input)
 	l.input = make(chan *batchRequest, inputCap)
