@@ -273,7 +273,7 @@ func (l *Loader) sleeper() {
 	// used by batch to close early. usually triggered by max batch size
 	case <-l.forceStartBatch:
 	// this will move this goroutine to the back of the callstack?
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(16 * time.Millisecond):
 	}
 
 	// reset
