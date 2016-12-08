@@ -60,7 +60,7 @@ type Loader struct {
 	forceStartBatch chan bool
 
 	// connt of queued up items
-	countLock sync.Mutex
+	countLock sync.RWMutex
 	count     int
 
 	// internal channel that is used to batch items
@@ -209,9 +209,11 @@ func (l *Loader) Load(key string) Thunk {
 		l.countLock.Unlock()
 
 		// if we hit our limit, force the batch to start
+		l.countLock.RLock()
 		if l.count == l.batchCap {
 			l.forceStartBatch <- true
 		}
+		l.countLock.RUnlock()
 	}
 
 	return thunk
