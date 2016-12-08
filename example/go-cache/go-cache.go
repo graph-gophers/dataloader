@@ -38,7 +38,7 @@ func main() {
 	// go-cache will automaticlly cleanup expired items on given diration
 	c := cache.New(time.Duration(15*time.Minute), time.Duration(15*time.Minute))
 	cache := &Cache{c}
-	loader := dataloader.NewBatchedLoader(batchFunc, cache, 0)
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	// immediately call the future function from loader
 	result := loader.Load("some key")()

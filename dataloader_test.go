@@ -219,7 +219,6 @@ func TestLoader(t *testing.T) {
 // test helpers
 func IDLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
-	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
@@ -227,12 +226,11 @@ func IDLoader(max int) (*Loader, *[][]string) {
 			results = append(results, &Result{key, nil})
 		}
 		return results
-	}, cache, max)
+	}, WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func ErrorLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
-	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
@@ -240,18 +238,17 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 			results = append(results, &Result{key, fmt.Errorf("this is a test error")})
 		}
 		return results
-	}, cache, max)
+	}, WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func BadLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
-	cache := NewCache()
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
 		loadCalls = append(loadCalls, keys)
 		results = append(results, &Result{keys[0], nil})
 		return results
-	}, cache, max)
+	}, WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func NoCacheLoader(max int) (*Loader, *[][]string) {
@@ -264,7 +261,7 @@ func NoCacheLoader(max int) (*Loader, *[][]string) {
 			results = append(results, &Result{key, nil})
 		}
 		return results
-	}, cache, max)
+	}, WithCache(cache), WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 
@@ -282,8 +279,7 @@ func batchIdentity(keys []string) (results []*Result) {
 }
 
 func BenchmarkLoader(b *testing.B) {
-	cache := NewCache()
-	UserLoader := NewBatchedLoader(batchIdentity, cache, 0)
+	UserLoader := NewBatchedLoader(batchIdentity)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		UserLoader.Load(strconv.Itoa(i))

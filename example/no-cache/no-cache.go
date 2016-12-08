@@ -9,7 +9,7 @@ import (
 func main() {
 	// go-cache will automaticlly cleanup expired items on given diration
 	cache := &dataloader.NoCache{}
-	loader := dataloader.NewBatchedLoader(batchFunc, cache, 0)
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	result := loader.Load("some key")()
 	if result.Error != nil {

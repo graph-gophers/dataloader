@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// the buffer amount fot the input channel.
-// I wish we had unbounded channels
-var inputCap int = 1000
-
 // Interface is a `DataLoader` Interface which defines a public API for loading data from a particular
 // data back-end with unique keys such as the `id` column of a SQL table or
 // document name in a MongoDB database, given a batch loading function.
@@ -53,7 +49,7 @@ type Loader struct {
 	batchFn BatchFunc
 
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
-	cap int
+	batchCap int
 
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
@@ -71,6 +67,12 @@ type Loader struct {
 	inputLock sync.RWMutex
 	input     chan *batchRequest
 	batching  bool
+
+	// the maximum input queue size. Set to 0 if you want it to be unbounded.
+	inputCap int
+
+	// the amount of time to wait before triggering a batch
+	wait time.Duration
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -94,16 +96,62 @@ type resultError struct {
 	index int
 }
 
-// NewBatchedLoader constructs a new Loader with given options
-func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
-	return &Loader{
-		batchFn:         batchFn,
-		cache:           cache,
-		cap:             cap,
-		forceStartBatch: make(chan bool),
-		count:           0,
-		input:           make(chan *batchRequest, inputCap),
+// Option allows for configuration of Loader fields.
+type Option func(*Loader)
+
+// WithCache sets the BatchedLoader cache. Defaults to InMemoryCache if a Cache is not set.
+func WithCache(c Cache) Option {
+	return func(l *Loader) {
+		l.cache = c
 	}
+}
+
+// WithBatchCapacity sets the batch capacity. Default is 0 (unbounded).
+func WithBatchCapacity(c int) Option {
+	return func(l *Loader) {
+		l.batchCap = c
+	}
+}
+
+// WithInputCapacity sets the input capacity. Default is 1000.
+func WithInputCapacity(c int) Option {
+	return func(l *Loader) {
+		l.inputCap = c
+	}
+}
+
+// WithWait sets the amount of time to wait before triggering a batch.
+// Default duration is 16 milliseconds.
+func WithWait(d time.Duration) Option {
+	return func(l *Loader) {
+		l.wait = d
+	}
+}
+
+// NewBatchedLoader constructs a new Loader with given options.
+func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
+	loader := &Loader{
+		batchFn:         batchFn,
+		forceStartBatch: make(chan bool),
+		inputCap:        1000,
+		wait:            16 * time.Millisecond,
+	}
+
+	// Apply options
+	for _, apply := range opts {
+		apply(loader)
+	}
+
+	// Set defaults
+	if loader.cache == nil {
+		loader.cache = NewCache()
+	}
+
+	if loader.input == nil {
+		loader.input = make(chan *batchRequest, loader.inputCap)
+	}
+
+	return loader
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
@@ -155,13 +203,13 @@ func (l *Loader) Load(key string) Thunk {
 	l.inputLock.RUnlock()
 
 	// if we need to keep track of the count (max batch), then do so.
-	if l.cap > 0 {
+	if l.batchCap > 0 {
 		l.countLock.Lock()
 		l.count++
 		l.countLock.Unlock()
 
 		// if we hit our limit, force the batch to start
-		if l.count == l.cap {
+		if l.count == l.batchCap {
 			l.forceStartBatch <- true
 		}
 	}
@@ -270,14 +318,14 @@ func (l *Loader) sleeper() {
 	select {
 	// used by batch to close early. usually triggered by max batch size
 	case <-l.forceStartBatch:
-	// this will move this goroutine to the back of the callstack?
-	case <-time.After(16 * time.Millisecond):
+		// this will move this goroutine to the back of the callstack?
+	case <-time.After(l.wait):
 	}
 
 	// reset
 	l.inputLock.Lock()
 	close(l.input)
-	l.input = make(chan *batchRequest, inputCap)
+	l.input = make(chan *batchRequest, l.inputCap)
 	l.batching = false
 	l.inputLock.Unlock()
 }

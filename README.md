@@ -18,11 +18,8 @@ batchFn := func(keys []string) []dataloader.Result {
   return results
 }
 
-// Setup Cache (could be any cache that implements `Cache` interface)
-cache := dataloader.NewCache()
-
-// create Loader
-loader := dataloader.NewBatchedLoader(batchFn, cache, 0)
+// create Loader with an in-memory cache
+loader := dataloader.NewBatchedLoader(batchFn)
 
 /**
  * Use loader
