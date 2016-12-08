@@ -66,7 +66,10 @@ type Loader struct {
 	// internal channel that is used to batch items
 	inputLock sync.RWMutex
 	input     chan *batchRequest
-	batching  bool
+
+	// flag that is used to keep track if we've queued a batch yet
+	batchingLock sync.RWMutex
+	batching     bool
 
 	// the maximum input queue size. Set to 0 if you want it to be unbounded.
 	inputCap int
@@ -190,11 +193,15 @@ func (l *Loader) Load(key string) Thunk {
 	req := &batchRequest{key, c}
 
 	// start the batch window if it hasn't already started.
+	l.batchingLock.RLock()
 	if !l.batching {
-		l.inputLock.Lock()
+		l.batchingLock.RUnlock()
+		l.batchingLock.Lock()
 		l.batching = true
-		l.inputLock.Unlock()
+		l.batchingLock.Unlock()
 		go l.batch()
+	} else {
+		l.batchingLock.RUnlock()
 	}
 
 	// this lock prevents sending on the channel at the same time that it is being closed.
@@ -223,9 +230,13 @@ func (l *Loader) Load(key string) Thunk {
 func (l *Loader) LoadMany(keys []string) ThunkMany {
 	length := len(keys)
 	data := make([]interface{}, length)
-	errors := make([]error, 0, length)
 	c := make(chan *ResultMany, 1)
 	wg := sync.WaitGroup{}
+
+	var errors struct {
+		mu   sync.Mutex
+		list []error
+	}
 
 	wg.Add(length)
 	for i := range keys {
@@ -234,7 +245,9 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 			thunk := l.Load(keys[i])
 			result := thunk()
 			if result.Error != nil {
-				errors = append(errors, resultError{result.Error, i})
+				errors.mu.Lock()
+				errors.list = append(errors.list, resultError{result.Error, i})
+				errors.mu.Unlock()
 			}
 			data[i] = result.Data
 		}(i)
@@ -242,7 +255,7 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 
 	go func() {
 		wg.Wait()
-		c <- &ResultMany{data, errors}
+		c <- &ResultMany{data, errors.list}
 		close(c)
 	}()
 
@@ -303,8 +316,10 @@ func (l *Loader) batch() {
 	go l.sleeper()
 
 	for item := range l.input {
+		l.inputLock.RLock()
 		keys = append(keys, item.key)
 		reqs = append(reqs, item)
+		l.inputLock.RUnlock()
 	}
 
 	items := l.batchFn(keys)
@@ -328,11 +343,15 @@ func (l *Loader) sleeper() {
 	l.inputLock.Lock()
 	close(l.input)
 	l.input = make(chan *batchRequest, l.inputCap)
+
+	l.batchingLock.Lock()
 	l.batching = false
+	l.batchingLock.Unlock()
 
 	l.countLock.Lock()
 	l.count = 0
 	l.countLock.Unlock()
 
 	l.inputLock.Unlock()
+
 }

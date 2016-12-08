@@ -5,6 +5,7 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -218,10 +219,13 @@ func TestLoader(t *testing.T) {
 
 // test helpers
 func IDLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
 	var loadCalls [][]string
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
+		mu.Lock()
 		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, nil})
 		}
@@ -230,10 +234,13 @@ func IDLoader(max int) (*Loader, *[][]string) {
 	return identityLoader, &loadCalls
 }
 func ErrorLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
 	var loadCalls [][]string
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
+		mu.Lock()
 		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, fmt.Errorf("this is a test error")})
 		}
@@ -242,21 +249,27 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 	return identityLoader, &loadCalls
 }
 func BadLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
 	var loadCalls [][]string
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
+		mu.Lock()
 		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
 		results = append(results, &Result{keys[0], nil})
 		return results
 	}, WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func NoCacheLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
 	var loadCalls [][]string
 	cache := &NoCache{}
 	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
 		var results []*Result
+		mu.Lock()
 		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, nil})
 		}
