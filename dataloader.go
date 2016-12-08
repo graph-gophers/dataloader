@@ -108,9 +108,11 @@ func NewBatchedLoader(batchFn BatchFunc, cache Cache, cap int) *Loader {
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
 func (l *Loader) Load(key string) Thunk {
-	var value *Result
 	c := make(chan *Result, 1)
-	cond := sync.NewCond(&sync.Mutex{})
+	var result struct {
+		mu    sync.RWMutex
+		value *Result
+	}
 
 	// lock to prevent duplicate keys coming in before item has been added to cache.
 	l.cacheLock.Lock()
@@ -120,12 +122,16 @@ func (l *Loader) Load(key string) Thunk {
 	}
 
 	thunk := func() *Result {
-		if value == nil {
-			cond.L.Lock()
-			cond.Wait()
-			cond.L.Unlock()
+		if result.value == nil {
+			if v, ok := <-c; ok {
+				result.mu.Lock()
+				result.value = v
+				result.mu.Unlock()
+			}
 		}
-		return value
+		result.mu.RLock()
+		defer result.mu.RUnlock()
+		return result.value
 	}
 
 	l.cache.Set(key, thunk)
@@ -160,13 +166,6 @@ func (l *Loader) Load(key string) Thunk {
 		}
 	}
 
-	defer func() {
-		go func() {
-			value = <-c
-			cond.Broadcast()
-		}()
-	}()
-
 	return thunk
 }
 
@@ -176,7 +175,6 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	data := make([]interface{}, length)
 	errors := make([]error, 0, length)
 	c := make(chan *ResultMany, 1)
-	cond := sync.NewCond(&sync.Mutex{})
 	wg := sync.WaitGroup{}
 
 	wg.Add(length)
@@ -198,23 +196,23 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		close(c)
 	}()
 
-	var value *ResultMany
-
-	thunkMany := func() *ResultMany {
-		if value == nil {
-			cond.L.Lock()
-			cond.Wait()
-			cond.L.Unlock()
-		}
-		return value
+	var result struct {
+		mu    sync.RWMutex
+		value *ResultMany
 	}
 
-	defer func() {
-		go func() {
-			value = <-c
-			cond.Broadcast()
-		}()
-	}()
+	thunkMany := func() *ResultMany {
+		if result.value == nil {
+			if v, ok := <-c; ok {
+				result.mu.Lock()
+				result.value = v
+				result.mu.Unlock()
+			}
+		}
+		result.mu.RLock()
+		defer result.mu.RUnlock()
+		return result.value
+	}
 
 	return thunkMany
 }
