@@ -123,11 +123,11 @@ func (l *Loader) Load(key string) Thunk {
 
 	thunk := func() *Result {
 		if result.value == nil {
+			result.mu.Lock()
 			if v, ok := <-c; ok {
-				result.mu.Lock()
 				result.value = v
-				result.mu.Unlock()
 			}
+			result.mu.Unlock()
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
@@ -203,11 +203,11 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 
 	thunkMany := func() *ResultMany {
 		if result.value == nil {
+			result.mu.Lock()
 			if v, ok := <-c; ok {
-				result.mu.Lock()
 				result.value = v
-				result.mu.Unlock()
 			}
+			result.mu.Unlock()
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
