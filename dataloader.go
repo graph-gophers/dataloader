@@ -279,5 +279,10 @@ func (l *Loader) sleeper() {
 	close(l.input)
 	l.input = make(chan *batchRequest, inputCap)
 	l.batching = false
+
+	l.countLock.Lock()
+	l.count = 0
+	l.countLock.Unlock()
+
 	l.inputLock.Unlock()
 }
