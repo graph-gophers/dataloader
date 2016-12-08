@@ -13,6 +13,7 @@ import (
 ///////////////////////////////////////////////////
 func TestLoader(t *testing.T) {
 	t.Run("test Load method", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
 		value := future()
@@ -22,6 +23,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("test LoadMany method", func(t *testing.T) {
+		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		future := errorLoader.LoadMany([]string{"1", "2", "3"})
 		value := future()
@@ -31,6 +33,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("test LoadMany method", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.LoadMany([]string{"1", "2", "3"})
 		value := future()
@@ -41,6 +44,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("batches many requests", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
@@ -57,6 +61,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("responds to max batch size", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(2)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
@@ -76,6 +81,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("caches repeated requests", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("1")
@@ -92,6 +98,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows primed cache", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		future1 := identityLoader.Load("1")
@@ -113,6 +120,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows clear value in cache", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
@@ -137,6 +145,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows clearAll values in cache", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
@@ -160,6 +169,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("all methods on NoCache are Noops", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
@@ -183,6 +193,7 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("no cache does not cache anything", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
