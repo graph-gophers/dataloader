@@ -158,12 +158,14 @@ func (l *Loader) Load(key string) Thunk {
 	if l.cap > 0 {
 		l.countLock.Lock()
 		l.count++
-		l.countLock.Unlock()
 
 		// if we hit our limit, force the batch to start
 		if l.count == l.cap {
 			l.forceStartBatch <- true
+			l.count = 0
 		}
+
+		l.countLock.Unlock()
 	}
 
 	return thunk
