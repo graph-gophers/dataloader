@@ -1,3 +1,2 @@
 language: go
-script: go test -v -cover
-
+script: go test -v -cover -race
