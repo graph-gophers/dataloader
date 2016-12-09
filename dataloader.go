@@ -324,6 +324,10 @@ func (l *Loader) batch() {
 
 	items := l.batchFn(keys)
 
+	if len(items) != len(reqs) {
+		// TODO: Some kind of error handling, like https://github.com/facebook/dataloader/blob/master/src/index.js#L271-L280
+	}
+
 	for i, req := range reqs {
 		req.channel <- items[i]
 		close(req.channel)

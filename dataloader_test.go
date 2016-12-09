@@ -61,6 +61,26 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("number of results matches number of keys", func(t *testing.T) {
+		t.Parallel()
+		faultyLoader, _ := FaultyLoader()
+
+		n := 10
+		reqs := []Thunk{}
+		keys := []string{}
+		for i := 0; i < n; i++ {
+			key := strconv.Itoa(i)
+			reqs = append(reqs, faultyLoader.Load(key))
+			keys = append(keys, key)
+		}
+
+		for _, future := range reqs {
+			future()
+		}
+
+		// TODO: expect to get some kind of warning
+	})
+
 	t.Run("responds to max batch size", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(2)
@@ -276,6 +296,31 @@ func NoCacheLoader(max int) (*Loader, *[][]string) {
 		return results
 	}, WithCache(cache), WithBatchCapacity(max))
 	return identityLoader, &loadCalls
+}
+
+// FaultyLoader gives len(keys)-1 results.
+func FaultyLoader() (*Loader, *[][]string) {
+	var mu sync.Mutex
+	var loadCalls [][]string
+
+	loader := NewBatchedLoader(func(keys []string) []*Result {
+		var results []*Result
+		mu.Lock()
+		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
+
+		lastKeyIndex := len(keys) - 1
+		for i, key := range keys {
+			if i == lastKeyIndex {
+				break
+			}
+
+			results = append(results, &Result{key, nil})
+		}
+		return results
+	})
+
+	return loader, &loadCalls
 }
 
 ///////////////////////////////////////////////////
