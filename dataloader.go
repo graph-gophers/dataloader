@@ -3,6 +3,7 @@
 package dataloader
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -324,8 +325,24 @@ func (l *Loader) batch() {
 
 	items := l.batchFn(keys)
 
-	if len(items) != len(reqs) {
-		// TODO: Some kind of error handling, like https://github.com/facebook/dataloader/blob/master/src/index.js#L271-L280
+	if len(items) != len(keys) {
+		err := &Result{Error: fmt.Errorf(`
+			The batch function supplied did not return an array of responses
+			the same length as the array of keys.
+
+			Keys:
+			%v
+
+			Values:
+			%v
+		`, keys, items)}
+
+		for _, req := range reqs {
+			req.channel <- err
+			close(req.channel)
+		}
+
+		return
 	}
 
 	for i, req := range reqs {
