@@ -25,16 +25,16 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * Use loader
  *
  * A thunk is a function returned from a function that is a 
- * closure over a value (in this case a `Result` struct).
+ * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
  */
 thunk := loader.Load("key1")
-result := thunk()
-if result.Error != nil {
+result, err := thunk()
+if err != nil {
   // handle data error
 }
 
-log.Printf("value: %#v", result.Data)
+log.Printf("value: %#v", result)
 ```
 
 ## Cache
