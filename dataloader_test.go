@@ -17,8 +17,8 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
-		value := future()
-		if value.Data != "1" {
+		value, _ := future()
+		if value != "1" {
 			t.Error("load didn't return the right value")
 		}
 	})
@@ -27,8 +27,8 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		future := errorLoader.LoadMany([]string{"1", "2", "3"})
-		value := future()
-		if len(value.Error) != 3 {
+		_, err := future()
+		if len(err) != 3 {
 			t.Error("loadmany didn't return right number of errors")
 		}
 	})
@@ -37,8 +37,7 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.LoadMany([]string{"1", "2", "3"})
-		value := future()
-		results := value.Data
+		results, _ := future()
 		if results[0].(string) != "1" || results[1].(string) != "2" || results[2].(string) != "3" {
 			t.Error("loadmany didn't return the right value")
 		}
@@ -126,7 +125,7 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Load("A")
 
 		future1()
-		value := future2()
+		value, _ := future2()
 
 		calls := *loadCalls
 		inner := []string{"1"}
@@ -135,8 +134,8 @@ func TestLoader(t *testing.T) {
 			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
 		}
 
-		if value.Data.(string) != "Cached" {
-			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value.Data)
+		if value.(string) != "Cached" {
+			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value)
 		}
 	})
 
@@ -150,7 +149,7 @@ func TestLoader(t *testing.T) {
 		future3 := identityLoader.Load("B")
 
 		future1()
-		value := future2()
+		value, _ := future2()
 		future3()
 
 		calls := *loadCalls
@@ -160,8 +159,8 @@ func TestLoader(t *testing.T) {
 			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
 		}
 
-		if value.Data.(string) != "A" {
-			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value.Data)
+		if value.(string) != "A" {
+			t.Errorf("did not use primed cache value. Expected '%#v', got '%#v'", "Cached", value)
 		}
 	})
 

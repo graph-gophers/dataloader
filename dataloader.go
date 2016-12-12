@@ -83,10 +83,10 @@ type Loader struct {
 // After the value it contians is resolved, this function will return the result.
 // This function can be called many times, much like a Promise is other languages.
 // The value will only need to be resolved once so subsequent calls will return immediately.
-type Thunk func() *Result
+type Thunk func() (interface{}, error)
 
 // ThunkMany is much like the Thunk func type but it contains a list of results.
-type ThunkMany func() *ResultMany
+type ThunkMany func() ([]interface{}, []error)
 
 // type used to on input channel
 type batchRequest struct {
@@ -173,7 +173,7 @@ func (l *Loader) Load(key string) Thunk {
 		return v
 	}
 
-	thunk := func() *Result {
+	thunk := func() (interface{}, error) {
 		if result.value == nil {
 			result.mu.Lock()
 			if v, ok := <-c; ok {
@@ -183,7 +183,7 @@ func (l *Loader) Load(key string) Thunk {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
-		return result.value
+		return result.value.Data, result.value.Error
 	}
 
 	l.cache.Set(key, thunk)
@@ -244,13 +244,13 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		go func(i int) {
 			defer wg.Done()
 			thunk := l.Load(keys[i])
-			result := thunk()
-			if result.Error != nil {
+			result, err := thunk()
+			if err != nil {
 				errors.mu.Lock()
-				errors.list = append(errors.list, resultError{result.Error, i})
+				errors.list = append(errors.list, resultError{err, i})
 				errors.mu.Unlock()
 			}
-			data[i] = result.Data
+			data[i] = result
 		}(i)
 	}
 
@@ -265,7 +265,7 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		value *ResultMany
 	}
 
-	thunkMany := func() *ResultMany {
+	thunkMany := func() ([]interface{}, []error) {
 		if result.value == nil {
 			result.mu.Lock()
 			if v, ok := <-c; ok {
@@ -275,7 +275,7 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
-		return result.value
+		return result.value.Data, result.value.Error
 	}
 
 	return thunkMany
@@ -298,11 +298,8 @@ func (l *Loader) ClearAll() Interface {
 // Returns self for method chaining
 func (l *Loader) Prime(key string, value interface{}) Interface {
 	if _, ok := l.cache.Get(key); !ok {
-		future := func() *Result {
-			return &Result{
-				Data:  value,
-				Error: nil,
-			}
+		future := func() (interface{}, error) {
+			return value, nil
 		}
 		l.cache.Set(key, future)
 	}
