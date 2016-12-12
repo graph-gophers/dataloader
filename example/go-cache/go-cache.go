@@ -41,12 +41,12 @@ func main() {
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	// immediately call the future function from loader
-	result := loader.Load("some key")()
-	if result.Error != nil {
+	result, err := loader.Load("some key")()
+	if err != nil {
 		// handle error
 	}
 
-	fmt.Printf("identity: %s\n", result.Data)
+	fmt.Printf("identity: %s\n", result)
 }
 
 func batchFunc(keys []string) []*dataloader.Result {
