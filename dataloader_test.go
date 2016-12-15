@@ -17,7 +17,10 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
-		value, _ := future()
+		value, err := future()
+		if err != nil {
+			t.Error(err.Error())
+		}
 		if value != "1" {
 			t.Error("load didn't return the right value")
 		}
@@ -49,8 +52,14 @@ func TestLoader(t *testing.T) {
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("2")
 
-		future1()
-		future2()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1", "2"}
@@ -74,7 +83,10 @@ func TestLoader(t *testing.T) {
 		}
 
 		for _, future := range reqs {
-			future()
+			_, err := future()
+			if err == nil {
+				t.Error("if number of results doesn't match keys, all keys should contain error")
+			}
 		}
 
 		// TODO: expect to get some kind of warning
@@ -87,9 +99,18 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Load("2")
 		future3 := identityLoader.Load("3")
 
-		future1()
-		future2()
-		future3()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner1 := []string{"1", "2"}
@@ -106,8 +127,14 @@ func TestLoader(t *testing.T) {
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("1")
 
-		future1()
-		future2()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1"}
@@ -124,8 +151,14 @@ func TestLoader(t *testing.T) {
 		future1 := identityLoader.Load("1")
 		future2 := identityLoader.Load("A")
 
-		future1()
-		value, _ := future2()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		value, err := future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1"}
@@ -148,9 +181,18 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Clear("A").Load("A")
 		future3 := identityLoader.Load("B")
 
-		future1()
-		value, _ := future2()
-		future3()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		value, err := future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1", "A"}
@@ -176,9 +218,18 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Load("A")
 		future3 := identityLoader.Load("B")
 
-		future1()
-		future2()
-		future3()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1", "A", "B"}
@@ -200,9 +251,18 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Load("A")
 		future3 := identityLoader.Load("B")
 
-		future1()
-		future2()
-		future3()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1", "A", "B"}
@@ -222,9 +282,18 @@ func TestLoader(t *testing.T) {
 		future2 := identityLoader.Load("A")
 		future3 := identityLoader.Load("B")
 
-		future1()
-		future2()
-		future3()
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
 
 		calls := *loadCalls
 		inner := []string{"1", "A", "B"}
