@@ -361,6 +361,7 @@ func (l *Loader) sleeper() {
 	l.inputLock.Lock()
 	close(l.input)
 	l.input = make(chan *batchRequest, l.inputCap)
+	l.inputLock.Unlock()
 
 	l.batchingLock.Lock()
 	l.batching = false
@@ -369,7 +370,4 @@ func (l *Loader) sleeper() {
 	l.countLock.Lock()
 	l.count = 0
 	l.countLock.Unlock()
-
-	l.inputLock.Unlock()
-
 }
