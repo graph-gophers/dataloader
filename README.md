@@ -43,7 +43,4 @@ This implementation contains a very basic cache that is intended only to be used
 > it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anyting.
 
 ## Examples
-There are a few basic examples in the example folder. More coming soon!
-
-## TODO
-- Write **More** Tests
+There are a few basic examples in the example folder.
