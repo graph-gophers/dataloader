@@ -208,6 +208,33 @@ func TestLoader(t *testing.T) {
 
 	t.Run("allows clearAll values in cache", func(t *testing.T) {
 		t.Parallel()
+		batchOnlyLoader, loadCalls := BatchOnlyLoader(0)
+		future1 := batchOnlyLoader.Load("1")
+		future2 := batchOnlyLoader.Load("1")
+
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		calls := *loadCalls
+		inner := []string{"1"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not batch queries. Expected %#v, got %#v", expected, calls)
+		}
+
+		if _, found := batchOnlyLoader.cache.Get("1"); found {
+			t.Errorf("did not clear cache after batch. Expected %#v, got %#v", false, found)
+		}
+	})
+
+	t.Run("allows clearAll values in cache", func(t *testing.T) {
+		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
@@ -319,6 +346,21 @@ func IDLoader(max int) (*Loader, *[][]string) {
 		}
 		return results
 	}, WithBatchCapacity(max))
+	return identityLoader, &loadCalls
+}
+func BatchOnlyLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
+	var loadCalls [][]string
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		var results []*Result
+		mu.Lock()
+		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
+		for _, key := range keys {
+			results = append(results, &Result{key, nil})
+		}
+		return results
+	}, WithBatchCapacity(max), WithClearCacheOnBatch())
 	return identityLoader, &loadCalls
 }
 func ErrorLoader(max int) (*Loader, *[][]string) {

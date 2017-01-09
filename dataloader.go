@@ -52,6 +52,10 @@ type Loader struct {
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
 	batchCap int
 
+	// should we clear the cache on each batch?
+	// this would allow batching but no long term caching
+	clearCacheOnBatch bool
+
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
 	cacheLock sync.Mutex
@@ -129,6 +133,14 @@ func WithInputCapacity(c int) Option {
 func WithWait(d time.Duration) Option {
 	return func(l *Loader) {
 		l.wait = d
+	}
+}
+
+// WithClearCacheOnBatch allows batching of items but no long term caching.
+// It accomplishes this by clearing the cache after each batch operation.
+func WithClearCacheOnBatch() Option {
+	return func(l *Loader) {
+		l.clearCacheOnBatch = true
 	}
 }
 
@@ -370,4 +382,8 @@ func (l *Loader) sleeper() {
 	l.countLock.Lock()
 	l.count = 0
 	l.countLock.Unlock()
+
+	if l.clearCacheOnBatch {
+		l.ClearAll()
+	}
 }
