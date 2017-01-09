@@ -52,10 +52,6 @@ type Loader struct {
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
 	batchCap int
 
-	// should we clear the cache on each batch?
-	// this would allow batching but no long term caching
-	clearCacheOnBatch bool
-
 	// the internal cache. This packages contains a basic cache implementation but any custom cache
 	// implementation could be used as long as it implements the `Cache` interface.
 	cacheLock sync.Mutex
@@ -81,6 +77,10 @@ type Loader struct {
 
 	// the amount of time to wait before triggering a batch
 	wait time.Duration
+
+	// should we clear the cache on each batch?
+	// this would allow batching but no long term caching
+	clearCacheOnBatch bool
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
