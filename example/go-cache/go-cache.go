@@ -26,8 +26,12 @@ func (c *Cache) Set(key string, value dataloader.Thunk) {
 	c.c.Set(key, value, 0)
 }
 
-func (c *Cache) Delete(key string) {
-	c.c.Delete(key)
+func (c *Cache) Delete(key string) bool {
+	if _, found := c.c.Get(key); found {
+		c.c.Delete(key)
+		return true
+	}
+	return false
 }
 
 func (c *Cache) Clear() {

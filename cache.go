@@ -6,7 +6,7 @@ import "sync"
 type Cache interface {
 	Get(string) (Thunk, bool)
 	Set(string, Thunk)
-	Delete(string)
+	Delete(string) bool
 	Clear()
 }
 
@@ -51,10 +51,14 @@ func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(key string) {
-	c.mu.Lock()
-	delete(c.items, key)
-	c.mu.Unlock()
+func (c *InMemoryCache) Delete(key string) bool {
+	if _, found := c.items[key]; found {
+		c.mu.Lock()
+		delete(c.items, key)
+		c.mu.Unlock()
+		return true
+	}
+	return false
 }
 
 // Clear clears the entire cache
@@ -76,7 +80,7 @@ func (c *NoCache) Get(string) (Thunk, bool) { return nil, false }
 func (c *NoCache) Set(string, Thunk) { return }
 
 // Delete is a NOOP
-func (c *NoCache) Delete(string) { return }
+func (c *NoCache) Delete(string) bool { return false }
 
 // Clear is a NOOP
 func (c *NoCache) Clear() { return }
