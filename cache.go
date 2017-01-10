@@ -39,23 +39,22 @@ func (c *InMemoryCache) Set(key string, value Thunk) {
 // indicating of value was found
 func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	item, found := c.items[key]
 	if !found {
-		c.mu.RUnlock()
 		return nil, false
 	}
 
-	c.mu.RUnlock()
 	return item, true
 }
 
 // Delete deletes item at `key` from cache
 func (c *InMemoryCache) Delete(key string) bool {
-	if _, found := c.items[key]; found {
+	if _, found := c.Get(key); found {
 		c.mu.Lock()
+		defer c.mu.Unlock()
 		delete(c.items, key)
-		c.mu.Unlock()
 		return true
 	}
 	return false

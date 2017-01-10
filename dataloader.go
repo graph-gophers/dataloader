@@ -56,15 +56,16 @@ type Loader struct {
 	// implementation could be used as long as it implements the `Cache` interface.
 	cacheLock sync.Mutex
 	cache     Cache
+	// should we clear the cache on each batch?
+	// this would allow batching but no long term caching
+	clearCacheOnBatch bool
 
 	// used to close the input channel early
 	forceStartBatch chan bool
 
 	// connt of queued up items
 	countLock sync.RWMutex
-	count     int
-
-	// internal channel that is used to batch items
+	count     int // internal channel that is used to batch items
 	inputLock sync.RWMutex
 	input     chan *batchRequest
 
@@ -77,10 +78,6 @@ type Loader struct {
 
 	// the amount of time to wait before triggering a batch
 	wait time.Duration
-
-	// should we clear the cache on each batch?
-	// this would allow batching but no long term caching
-	clearCacheOnBatch bool
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -140,7 +137,9 @@ func WithWait(d time.Duration) Option {
 // It accomplishes this by clearing the cache after each batch operation.
 func WithClearCacheOnBatch() Option {
 	return func(l *Loader) {
+		l.cacheLock.Lock()
 		l.clearCacheOnBatch = true
+		l.cacheLock.Unlock()
 	}
 }
 
@@ -295,14 +294,18 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 
 // Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
 func (l *Loader) Clear(key string) Interface {
+	l.cacheLock.Lock()
 	l.cache.Delete(key)
+	l.cacheLock.Unlock()
 	return l
 }
 
 // ClearAll clears the entire cache. To be used when some event results in unknown invalidations.
 // Returns self for method chaining.
 func (l *Loader) ClearAll() Interface {
+	l.cacheLock.Lock()
 	l.cache.Clear()
+	l.cacheLock.Unlock()
 	return l
 }
 
@@ -384,6 +387,6 @@ func (l *Loader) sleeper() {
 	l.countLock.Unlock()
 
 	if l.clearCacheOnBatch {
-		l.ClearAll()
+		l.cache.Clear()
 	}
 }
