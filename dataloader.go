@@ -211,7 +211,14 @@ func (l *Loader) Load(key string) Thunk {
 		l.batchingLock.Lock()
 		l.batching = true
 		l.batchingLock.Unlock()
-		go l.batch()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					c <- &Result{Error: fmt.Errorf("Panic received in batch function: %v", r)}
+				}
+			}()
+			l.batch()
+		}()
 	} else {
 		l.batchingLock.RUnlock()
 	}
