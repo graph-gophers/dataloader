@@ -26,6 +26,22 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test Load Method Panic Safety", func(t *testing.T) {
+		t.Parallel()
+		defer func() {
+			r := recover()
+			if r != nil {
+				t.Error("Panic Loader's panic should have been handled'")
+			}
+		}()
+		panicLoader, _ := PanicLoader(0)
+		future := panicLoader.Load("1")
+		_, err := future()
+		if err == nil || err.Error() != "Panic received in batch function: Programming error" {
+			t.Error("Panic was not propagated as an error.")
+		}
+	})
+
 	t.Run("test LoadMany method", func(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
@@ -33,6 +49,22 @@ func TestLoader(t *testing.T) {
 		_, err := future()
 		if len(err) != 3 {
 			t.Error("loadmany didn't return right number of errors")
+		}
+	})
+
+	t.Run("test Load Many Method Panic Safety", func(t *testing.T) {
+		t.Parallel()
+		defer func() {
+			r := recover()
+			if r != nil {
+				t.Error("Panic Loader's panic should have been handled'")
+			}
+		}()
+		panicLoader, _ := PanicLoader(0)
+		future := panicLoader.LoadMany([]string{"1"})
+		_, errs := future()
+		if len(errs) < 1 || errs[0].Error() != "Panic received in batch function: Programming error" {
+			t.Error("Panic was not propagated as an error.")
 		}
 	})
 
@@ -377,6 +409,13 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 		return results
 	}, WithBatchCapacity(max))
 	return identityLoader, &loadCalls
+}
+func PanicLoader(max int) (*Loader, *[][]string) {
+	var loadCalls [][]string
+	panicLoader := NewBatchedLoader(func(keys []string) []*Result {
+		panic("Programming error")
+	}, WithBatchCapacity(max))
+	return panicLoader, &loadCalls
 }
 func BadLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex

@@ -76,7 +76,7 @@ type Loader struct {
 	curBatcher *batcher
 
 	// used to close the sleeper of the current batcher
-	endSleeper chan struct{}
+	endSleeper chan bool
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -203,9 +203,16 @@ func (l *Loader) Load(key string) Thunk {
 	if l.curBatcher == nil {
 		l.curBatcher = l.newBatcher()
 		// start the current batcher batch function
-		go l.curBatcher.batch()
+		go func(b *batcher) {
+			defer func() {
+				if r := recover(); r != nil {
+					c <- &Result{Error: fmt.Errorf("Panic received in batch function: %v", r)}
+				}
+			}()
+			b.batch()
+		}(l.curBatcher)
 		// start a sleeper for the current batcher
-		l.endSleeper = make(chan struct{})
+		l.endSleeper = make(chan bool)
 		go l.sleeper(l.curBatcher, l.endSleeper)
 	}
 
@@ -306,10 +313,10 @@ func (l *Loader) ClearAll() Interface {
 // Returns self for method chaining
 func (l *Loader) Prime(key string, value interface{}) Interface {
 	if _, ok := l.cache.Get(key); !ok {
-		future := func() (interface{}, error) {
+		thunk := func() (interface{}, error) {
 			return value, nil
 		}
-		l.cache.Set(key, future)
+		l.cache.Set(key, thunk)
 	}
 	return l
 }
@@ -385,7 +392,7 @@ func (b *batcher) batch() {
 }
 
 // wait the appropriate amount of time for the provided batcher
-func (l *Loader) sleeper(b *batcher, close chan struct{}) {
+func (l *Loader) sleeper(b *batcher, close chan bool) {
 	select {
 	// used by batch to close early. usually triggered by max batch size
 	case <-close:
