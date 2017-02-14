@@ -60,24 +60,23 @@ type Loader struct {
 	// this would allow batching but no long term caching
 	clearCacheOnBatch bool
 
-	// used to close the input channel early
-	forceStartBatch chan bool
-
-	// connt of queued up items
-	countLock sync.RWMutex
-	count     int // internal channel that is used to batch items
-	inputLock sync.RWMutex
-	input     chan *batchRequest
-
-	// flag that is used to keep track if we've queued a batch yet
-	batchingLock sync.RWMutex
-	batching     bool
+	// count of queued up items
+	count int
 
 	// the maximum input queue size. Set to 0 if you want it to be unbounded.
 	inputCap int
 
 	// the amount of time to wait before triggering a batch
 	wait time.Duration
+
+	// lock to protect the batching operations
+	batchLock sync.Mutex
+
+	// current batcher
+	curBatcher *batcher
+
+	// used to close the sleeper of the current batcher
+	endSleeper chan struct{}
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -146,10 +145,9 @@ func WithClearCacheOnBatch() Option {
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	loader := &Loader{
-		batchFn:         batchFn,
-		forceStartBatch: make(chan bool),
-		inputCap:        1000,
-		wait:            16 * time.Millisecond,
+		batchFn:  batchFn,
+		inputCap: 1000,
+		wait:     16 * time.Millisecond,
 	}
 
 	// Apply options
@@ -160,10 +158,6 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	// Set defaults
 	if loader.cache == nil {
 		loader.cache = NewCache()
-	}
-
-	if loader.input == nil {
-		loader.input = make(chan *batchRequest, loader.inputCap)
 	}
 
 	return loader
@@ -204,36 +198,35 @@ func (l *Loader) Load(key string) Thunk {
 	// the result on
 	req := &batchRequest{key, c}
 
+	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
-	l.batchingLock.RLock()
-	if !l.batching {
-		l.batchingLock.RUnlock()
-		l.batchingLock.Lock()
-		l.batching = true
-		l.batchingLock.Unlock()
-		go l.batch()
-	} else {
-		l.batchingLock.RUnlock()
+	if l.curBatcher == nil {
+		l.curBatcher = l.newBatcher()
+		// start the current batcher batch function
+		go l.curBatcher.batch()
+		// start a sleeper for the current batcher
+		l.endSleeper = make(chan struct{})
+		go l.sleeper(l.curBatcher, l.endSleeper)
 	}
 
-	// this lock prevents sending on the channel at the same time that it is being closed.
-	l.inputLock.RLock()
-	l.input <- req
-	l.inputLock.RUnlock()
+	l.curBatcher.input <- req
 
 	// if we need to keep track of the count (max batch), then do so.
 	if l.batchCap > 0 {
-		l.countLock.Lock()
 		l.count++
-		l.countLock.Unlock()
-
 		// if we hit our limit, force the batch to start
-		l.countLock.RLock()
 		if l.count == l.batchCap {
-			l.forceStartBatch <- true
+			// end the batcher synchronously here because another call to Load
+			// may concurrently happen and needs to go to a new batcher.
+			l.curBatcher.end()
+			// end the sleeper for the current batcher.
+			// this is to stop the goroutine without waiting for the
+			// sleeper timeout.
+			close(l.endSleeper)
+			l.reset()
 		}
-		l.countLock.RUnlock()
 	}
+	l.batchLock.Unlock()
 
 	return thunk
 }
@@ -321,21 +314,49 @@ func (l *Loader) Prime(key string, value interface{}) Interface {
 	return l
 }
 
-// execuite the batch of all items in queue
-func (l *Loader) batch() {
+func (l *Loader) reset() {
+	l.count = 0
+	l.curBatcher = nil
+
+	if l.clearCacheOnBatch {
+		l.cache.Clear()
+	}
+}
+
+type batcher struct {
+	input    chan *batchRequest
+	batchFn  BatchFunc
+	finished bool
+}
+
+// newBatcher returns a batcher for the current requests
+// all the batcher methods must be protected by a global batchLock
+func (l *Loader) newBatcher() *batcher {
+	return &batcher{
+		input:   make(chan *batchRequest, l.inputCap),
+		batchFn: l.batchFn,
+	}
+}
+
+// stop receiving input and process batch function
+func (b *batcher) end() {
+	if !b.finished {
+		close(b.input)
+		b.finished = true
+	}
+}
+
+// execute the batch of all items in queue
+func (b *batcher) batch() {
 	var keys []string
 	var reqs []*batchRequest
 
-	go l.sleeper()
-
-	for item := range l.input {
-		l.inputLock.RLock()
+	for item := range b.input {
 		keys = append(keys, item.key)
 		reqs = append(reqs, item)
-		l.inputLock.RUnlock()
 	}
 
-	items := l.batchFn(keys)
+	items := b.batchFn(keys)
 
 	if len(items) != len(keys) {
 		err := &Result{Error: fmt.Errorf(`
@@ -363,30 +384,27 @@ func (l *Loader) batch() {
 	}
 }
 
-// wait the appropriate amount of time for next batch
-func (l *Loader) sleeper() {
+// wait the appropriate amount of time for the provided batcher
+func (l *Loader) sleeper(b *batcher, close chan struct{}) {
 	select {
 	// used by batch to close early. usually triggered by max batch size
-	case <-l.forceStartBatch:
-		// this will move this goroutine to the back of the callstack?
+	case <-close:
+		return
+	// this will move this goroutine to the back of the callstack?
 	case <-time.After(l.wait):
 	}
 
 	// reset
-	l.inputLock.Lock()
-	close(l.input)
-	l.input = make(chan *batchRequest, l.inputCap)
-	l.inputLock.Unlock()
+	// this is protected by the batchLock to avoid closing the batcher input
+	// channel while Load is inserting a request
+	l.batchLock.Lock()
+	b.end()
 
-	l.batchingLock.Lock()
-	l.batching = false
-	l.batchingLock.Unlock()
-
-	l.countLock.Lock()
-	l.count = 0
-	l.countLock.Unlock()
-
-	if l.clearCacheOnBatch {
-		l.cache.Clear()
+	// We can end here also if the batcher has already been closed and a
+	// new one has been created. So reset the loader state only if the batcher
+	// is the current one
+	if l.curBatcher == b {
+		l.reset()
 	}
+	l.batchLock.Unlock()
 }

@@ -458,14 +458,19 @@ func BenchmarkLoader(b *testing.B) {
 type Avg struct {
 	total  float64
 	length float64
+	lock   sync.RWMutex
 }
 
 func (a *Avg) Add(v int) {
+	a.lock.Lock()
 	a.total += float64(v)
 	a.length++
+	a.lock.Unlock()
 }
 
 func (a *Avg) Avg() float64 {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
 	if a.total == 0 {
 		return 0
 	} else if a.length == 0 {
