@@ -179,7 +179,11 @@ func (l *Loader) Load(key string) Thunk {
 	}
 
 	thunk := func() (interface{}, error) {
-		if result.value == nil {
+		result.mu.RLock()
+		resultNotSet := result.value == nil
+		result.mu.RUnlock()
+
+		if resultNotSet {
 			result.mu.Lock()
 			if v, ok := <-c; ok {
 				result.value = v
@@ -277,7 +281,11 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	}
 
 	thunkMany := func() ([]interface{}, []error) {
-		if result.value == nil {
+		result.mu.RLock()
+		resultNotSet := result.value == nil
+		result.mu.RUnlock()
+
+		if resultNotSet {
 			result.mu.Lock()
 			if v, ok := <-c; ok {
 				result.value = v
