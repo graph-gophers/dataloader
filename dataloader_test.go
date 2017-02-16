@@ -26,7 +26,7 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("test thunk passes race condition testing", func(t *testing.T) {
+	t.Run("test thunk does not contain race conditions", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
@@ -60,7 +60,7 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("test thunkmany passes race condition testing", func(t *testing.T) {
+	t.Run("test thunkmany does not contain race conditions", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.LoadMany([]string{"1", "2", "3"})
