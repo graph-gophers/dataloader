@@ -26,6 +26,14 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test thunk does not contain race conditions", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, _ := IDLoader(0)
+		future := identityLoader.Load("1")
+		go future()
+		go future()
+	})
+
 	t.Run("test Load Method Panic Safety", func(t *testing.T) {
 		t.Parallel()
 		defer func() {
@@ -50,6 +58,14 @@ func TestLoader(t *testing.T) {
 		if len(err) != 3 {
 			t.Error("loadmany didn't return right number of errors")
 		}
+	})
+
+	t.Run("test thunkmany does not contain race conditions", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, _ := IDLoader(0)
+		future := identityLoader.LoadMany([]string{"1", "2", "3"})
+		go future()
+		go future()
 	})
 
 	t.Run("test Load Many Method Panic Safety", func(t *testing.T) {
