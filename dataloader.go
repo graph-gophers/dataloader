@@ -208,11 +208,6 @@ func (l *Loader) Load(key string) Thunk {
 		l.curBatcher = l.newBatcher()
 		// start the current batcher batch function
 		go func(b *batcher) {
-			defer func() {
-				if r := recover(); r != nil {
-					c <- &Result{Error: fmt.Errorf("Panic received in batch function: %v", r)}
-				}
-			}()
 			b.batch()
 		}(l.curBatcher)
 		// start a sleeper for the current batcher
@@ -371,7 +366,24 @@ func (b *batcher) batch() {
 		reqs = append(reqs, item)
 	}
 
-	items := b.batchFn(keys)
+	var items []*Result
+	var panicErr interface{}
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicErr = r
+			}
+		}()
+		items = b.batchFn(keys)
+	}()
+
+	if panicErr != nil {
+		for _, req := range reqs {
+			req.channel <- &Result{Error: fmt.Errorf("Panic received in batch function: %v", panicErr)}
+			close(req.channel)
+		}
+		return
+	}
 
 	if len(items) != len(keys) {
 		err := &Result{Error: fmt.Errorf(`
