@@ -50,6 +50,27 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test Load Method Panic Safety in multiple keys", func(t *testing.T) {
+		t.Parallel()
+		defer func() {
+			r := recover()
+			if r != nil {
+				t.Error("Panic Loader's panic should have been handled'")
+			}
+		}()
+		panicLoader, _ := PanicLoader(0)
+		futures := []Thunk{}
+		for i := 0; i < 3;i++ {
+			futures = append(futures, panicLoader.Load(strconv.Itoa(i)))
+		}
+		for _, f := range futures {
+			_, err := f()
+			if err == nil || err.Error() != "Panic received in batch function: Programming error" {
+				t.Error("Panic was not propagated as an error.")
+			}
+		}
+	})
+
 	t.Run("test LoadMany method", func(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
