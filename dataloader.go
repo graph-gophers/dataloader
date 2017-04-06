@@ -4,6 +4,8 @@ package dataloader
 
 import (
 	"fmt"
+	"log"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -370,6 +372,10 @@ func (b *batcher) batch() {
 		defer func() {
 			if r := recover(); r != nil {
 				panicErr = r
+				const size = 64 << 10
+				buf := make([]byte, size)
+				buf = buf[:runtime.Stack(buf, false)]
+				log.Printf("Dataloder: Panic received in batch function:: %v\n%s", panicErr, buf)
 			}
 		}()
 		items = b.batchFn(keys)

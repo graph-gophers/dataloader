@@ -60,7 +60,7 @@ func TestLoader(t *testing.T) {
 		}()
 		panicLoader, _ := PanicLoader(0)
 		futures := []Thunk{}
-		for i := 0; i < 3;i++ {
+		for i := 0; i < 3; i++ {
 			futures = append(futures, panicLoader.Load(strconv.Itoa(i)))
 		}
 		for _, f := range futures {
