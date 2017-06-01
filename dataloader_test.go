@@ -1,6 +1,7 @@
 package dataloader
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"reflect"
@@ -17,6 +18,20 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
 		future := identityLoader.Load("1")
+		value, err := future()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		if value != "1" {
+			t.Error("load didn't return the right value")
+		}
+	})
+
+	t.Run("test LoadContext method", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, _ := IDLoader(0)
+		ctx := context.Background()
+		future := identityLoader.LoadContext(ctx, "1")
 		value, err := future()
 		if err != nil {
 			t.Error(err.Error())
@@ -75,6 +90,17 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		future := errorLoader.LoadMany([]string{"1", "2", "3"})
+		_, err := future()
+		if len(err) != 3 {
+			t.Error("loadmany didn't return right number of errors")
+		}
+	})
+
+	t.Run("test LoadMany method", func(t *testing.T) {
+		t.Parallel()
+		errorLoader, _ := ErrorLoader(0)
+		ctx := context.Background()
+		future := errorLoader.LoadManyContext(ctx, []string{"1", "2", "3"})
 		_, err := future()
 		if len(err) != 3 {
 			t.Error("loadmany didn't return right number of errors")
@@ -451,7 +477,7 @@ func PanicLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
 	panicLoader := NewBatchedLoader(func(keys []string) []*Result {
 		panic("Programming error")
-	}, WithBatchCapacity(max))
+	}, WithBatchCapacity(max), withSilentLogger())
 	return panicLoader, &loadCalls
 }
 func BadLoader(max int) (*Loader, *[][]string) {

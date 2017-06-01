@@ -3,6 +3,7 @@
 package dataloader
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"runtime"
@@ -21,10 +22,15 @@ import (
 type Interface interface {
 	Load(string) Thunk
 	LoadMany([]string) ThunkMany
+	LoadContext(context.Context, string) Thunk
+	LoadManyContext(context.Context, []string) ThunkMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
 }
+
+// BatchFuncContext is similar to BatchFunc but it also accepts a context as the first param.
+type BatchFuncContext func(context.Context, []string) []*Result
 
 // BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
 // It's important that the length of the input keys matches the length of the ouput results.
@@ -49,7 +55,7 @@ type ResultMany struct {
 // Loader implements the dataloader.Interface.
 type Loader struct {
 	// the batch function to be used by this loader
-	batchFn BatchFunc
+	batchFn BatchFuncContext
 
 	// the maximum batch size. Set to 0 if you want it to be unbounded.
 	batchCap int
@@ -79,6 +85,9 @@ type Loader struct {
 
 	// used to close the sleeper of the current batcher
 	endSleeper chan bool
+
+	// used in tests to prevent log messages
+	silent bool
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -134,6 +143,12 @@ func WithWait(d time.Duration) Option {
 	}
 }
 
+func withSilentLogger() Option {
+	return func(l *Loader) {
+		l.silent = true
+	}
+}
+
 // WithClearCacheOnBatch allows batching of items but no long term caching.
 // It accomplishes this by clearing the cache after each batch operation.
 func WithClearCacheOnBatch() Option {
@@ -144,8 +159,37 @@ func WithClearCacheOnBatch() Option {
 	}
 }
 
+// used to convert a BatchFunc to a BatchFuncContext
+func convertToBatchFuncContext(f BatchFunc) BatchFuncContext {
+	return func(ctx context.Context, keys []string) []*Result {
+		return f(keys)
+	}
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
+	loader := &Loader{
+		batchFn:  convertToBatchFuncContext(batchFn),
+		inputCap: 1000,
+		wait:     16 * time.Millisecond,
+		silent:   false,
+	}
+
+	// Apply options
+	for _, apply := range opts {
+		apply(loader)
+	}
+
+	// Set defaults
+	if loader.cache == nil {
+		loader.cache = NewCache()
+	}
+
+	return loader
+}
+
+// NewBatchedLoaderContext constructs a new Loader with given options.
+func NewBatchedLoaderContext(batchFn BatchFuncContext, opts ...Option) *Loader {
 	loader := &Loader{
 		batchFn:  batchFn,
 		inputCap: 1000,
@@ -167,6 +211,11 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
 func (l *Loader) Load(key string) Thunk {
+	return l.LoadContext(context.Background(), key)
+}
+
+// LoadContext load/resolves the given key, returning a channel that will contain the value and error
+func (l *Loader) LoadContext(ctx context.Context, key string) Thunk {
 	c := make(chan *Result, 1)
 	var result struct {
 		mu    sync.RWMutex
@@ -207,9 +256,9 @@ func (l *Loader) Load(key string) Thunk {
 	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
-		l.curBatcher = l.newBatcher()
+		l.curBatcher = l.newBatcher(l.silent)
 		// start the current batcher batch function
-		go l.curBatcher.batch()
+		go l.curBatcher.batch(ctx)
 		// start a sleeper for the current batcher
 		l.endSleeper = make(chan bool)
 		go l.sleeper(l.curBatcher, l.endSleeper)
@@ -239,6 +288,11 @@ func (l *Loader) Load(key string) Thunk {
 
 // LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
 func (l *Loader) LoadMany(keys []string) ThunkMany {
+	return l.LoadManyContext(context.Background(), keys)
+}
+
+// LoadManyContext loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
+func (l *Loader) LoadManyContext(ctx context.Context, keys []string) ThunkMany {
 	length := len(keys)
 	data := make([]interface{}, length)
 	c := make(chan *ResultMany, 1)
@@ -253,7 +307,7 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	for i := range keys {
 		go func(i int) {
 			defer wg.Done()
-			thunk := l.Load(keys[i])
+			thunk := l.LoadContext(ctx, keys[i])
 			result, err := thunk()
 			if err != nil {
 				errors.mu.Lock()
@@ -335,16 +389,18 @@ func (l *Loader) reset() {
 
 type batcher struct {
 	input    chan *batchRequest
-	batchFn  BatchFunc
+	batchFn  BatchFuncContext
 	finished bool
+	silent   bool
 }
 
 // newBatcher returns a batcher for the current requests
 // all the batcher methods must be protected by a global batchLock
-func (l *Loader) newBatcher() *batcher {
+func (l *Loader) newBatcher(silent bool) *batcher {
 	return &batcher{
 		input:   make(chan *batchRequest, l.inputCap),
 		batchFn: l.batchFn,
+		silent:  silent,
 	}
 }
 
@@ -357,7 +413,7 @@ func (b *batcher) end() {
 }
 
 // execute the batch of all items in queue
-func (b *batcher) batch() {
+func (b *batcher) batch(ctx context.Context) {
 	var keys []string
 	var reqs []*batchRequest
 
@@ -372,13 +428,16 @@ func (b *batcher) batch() {
 		defer func() {
 			if r := recover(); r != nil {
 				panicErr = r
+				if b.silent {
+					return // we don't need to log when in silent mode (used by tests)
+				}
 				const size = 64 << 10
 				buf := make([]byte, size)
 				buf = buf[:runtime.Stack(buf, false)]
 				log.Printf("Dataloder: Panic received in batch function:: %v\n%s", panicErr, buf)
 			}
 		}()
-		items = b.batchFn(keys)
+		items = b.batchFn(ctx, keys)
 	}()
 
 	if panicErr != nil {
