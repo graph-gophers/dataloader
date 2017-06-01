@@ -96,7 +96,7 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("test LoadMany method", func(t *testing.T) {
+	t.Run("test LoadManyContext method", func(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		ctx := context.Background()

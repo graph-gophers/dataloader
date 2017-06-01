@@ -21,8 +21,8 @@ import (
 // web request.
 type Interface interface {
 	Load(string) Thunk
-	LoadMany([]string) ThunkMany
 	LoadContext(context.Context, string) Thunk
+	LoadMany([]string) ThunkMany
 	LoadManyContext(context.Context, []string) ThunkMany
 	Clear(string) Interface
 	ClearAll() Interface
@@ -143,6 +143,7 @@ func WithWait(d time.Duration) Option {
 	}
 }
 
+// withSilentLogger is used by the tests to prevent logging
 func withSilentLogger() Option {
 	return func(l *Loader) {
 		l.silent = true
@@ -378,6 +379,7 @@ func (l *Loader) Prime(key string, value interface{}) Interface {
 	return l
 }
 
+// reset resets the current batcher
 func (l *Loader) reset() {
 	l.count = 0
 	l.curBatcher = nil
@@ -387,6 +389,7 @@ func (l *Loader) reset() {
 	}
 }
 
+// batcher is used to batch up request to BatchFunc
 type batcher struct {
 	input    chan *batchRequest
 	batchFn  BatchFuncContext
