@@ -8,6 +8,9 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 ## Status
 This project is a work in progress. Feedback is encouraged.
 
+## Install
+`go get -u gopkg.in/nicksrandall/dataloader.v2`
+
 ## Usage
 ```go
 // setup batch function
@@ -36,6 +39,24 @@ if err != nil {
 
 log.Printf("value: %#v", result)
 ```
+
+## Upgrade from v1
+The only difference between v1 and v2 is that we added use of [context](https://golang.org/pkg/context).
+
+```diff
+- loader.Load(key string) Thunk
++ loader.Load(ctx context.Context, key string) Thunk
+- loader.LoadMany(keys []string) ThunkMany
++ loader.LoadMany(ctx context.Context, keys []string) ThunkMany
+```
+
+```diff
+- type BatchFunc func([]string) []*Result
++ type BatchFunc func(context.Context, []string) []*Result
+```
+
+### Don't need/want to use context?
+You're welcome to install the v1 version of this library.
 
 ## Cache
 This implementation contains a very basic cache that is intended only to be used for short lived DataLoaders (i.e. DataLoaders that ony exsist for the life of an http request). You may use your own implementation if you want.
