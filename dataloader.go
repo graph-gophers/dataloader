@@ -3,6 +3,7 @@
 package dataloader
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"runtime"
@@ -19,8 +20,8 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(string) Thunk
-	LoadMany([]string) ThunkMany
+	Load(context.Context, string) Thunk
+	LoadMany(context.Context, []string) ThunkMany
 	Clear(string) Interface
 	ClearAll() Interface
 	Prime(key string, value interface{}) Interface
@@ -30,7 +31,7 @@ type Interface interface {
 // It's important that the length of the input keys matches the length of the ouput results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc func([]string) []*Result
+type BatchFunc func(context.Context, []string) []*Result
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occured while fetching the data.
@@ -79,6 +80,9 @@ type Loader struct {
 
 	// used to close the sleeper of the current batcher
 	endSleeper chan bool
+
+	// used by tests to prevent logs
+	silent bool
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -144,6 +148,13 @@ func WithClearCacheOnBatch() Option {
 	}
 }
 
+// withSilentLogger turns of log messages. It's used by the tests
+func withSilentLogger() Option {
+	return func(l *Loader) {
+		l.silent = true
+	}
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	loader := &Loader{
@@ -166,7 +177,7 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(key string) Thunk {
+func (l *Loader) Load(ctx context.Context, key string) Thunk {
 	c := make(chan *Result, 1)
 	var result struct {
 		mu    sync.RWMutex
@@ -207,9 +218,9 @@ func (l *Loader) Load(key string) Thunk {
 	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
-		l.curBatcher = l.newBatcher()
+		l.curBatcher = l.newBatcher(l.silent)
 		// start the current batcher batch function
-		go l.curBatcher.batch()
+		go l.curBatcher.batch(ctx)
 		// start a sleeper for the current batcher
 		l.endSleeper = make(chan bool)
 		go l.sleeper(l.curBatcher, l.endSleeper)
@@ -238,7 +249,7 @@ func (l *Loader) Load(key string) Thunk {
 }
 
 // LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
-func (l *Loader) LoadMany(keys []string) ThunkMany {
+func (l *Loader) LoadMany(ctx context.Context, keys []string) ThunkMany {
 	length := len(keys)
 	data := make([]interface{}, length)
 	c := make(chan *ResultMany, 1)
@@ -253,7 +264,7 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	for i := range keys {
 		go func(i int) {
 			defer wg.Done()
-			thunk := l.Load(keys[i])
+			thunk := l.Load(ctx, keys[i])
 			result, err := thunk()
 			if err != nil {
 				errors.mu.Lock()
@@ -337,14 +348,16 @@ type batcher struct {
 	input    chan *batchRequest
 	batchFn  BatchFunc
 	finished bool
+	silent   bool
 }
 
 // newBatcher returns a batcher for the current requests
 // all the batcher methods must be protected by a global batchLock
-func (l *Loader) newBatcher() *batcher {
+func (l *Loader) newBatcher(silent bool) *batcher {
 	return &batcher{
 		input:   make(chan *batchRequest, l.inputCap),
 		batchFn: l.batchFn,
+		silent:  silent,
 	}
 }
 
@@ -357,7 +370,7 @@ func (b *batcher) end() {
 }
 
 // execute the batch of all items in queue
-func (b *batcher) batch() {
+func (b *batcher) batch(ctx context.Context) {
 	var keys []string
 	var reqs []*batchRequest
 
@@ -372,13 +385,16 @@ func (b *batcher) batch() {
 		defer func() {
 			if r := recover(); r != nil {
 				panicErr = r
+				if b.silent {
+					return
+				}
 				const size = 64 << 10
 				buf := make([]byte, size)
 				buf = buf[:runtime.Stack(buf, false)]
 				log.Printf("Dataloder: Panic received in batch function:: %v\n%s", panicErr, buf)
 			}
 		}()
-		items = b.batchFn(keys)
+		items = b.batchFn(ctx, keys)
 	}()
 
 	if panicErr != nil {

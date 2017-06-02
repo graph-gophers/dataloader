@@ -3,16 +3,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/nicksrandall/dataloader"
 )
 
+// Cache implements the dataloader.Cache interface
 type Cache struct {
 	*lru.ARCCache
 }
 
+// Get gets an item from the cache
 func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 	v, ok := c.ARCCache.Get(key)
 	if ok {
@@ -21,10 +24,12 @@ func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 	return nil, ok
 }
 
+// Set sets an item in the cache
 func (c *Cache) Set(key string, value dataloader.Thunk) {
 	c.ARCCache.Add(key, value)
 }
 
+// Delete deletes an item in the cache
 func (c *Cache) Delete(key string) bool {
 	if c.ARCCache.Contains(key) {
 		c.ARCCache.Remove(key)
@@ -33,6 +38,7 @@ func (c *Cache) Delete(key string) bool {
 	return false
 }
 
+// Clear cleasrs the cache
 func (c *Cache) Clear() {
 	c.ARCCache.Purge()
 }
@@ -44,7 +50,7 @@ func main() {
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	// immediately call the future function from loader
-	result, err := loader.Load("some key")()
+	result, err := loader.Load(context.TODO(), "some key")()
 	if err != nil {
 		// handle error
 	}
@@ -52,7 +58,7 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(keys []string) []*dataloader.Result {
+func batchFunc(_ context.Context, keys []string) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {

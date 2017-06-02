@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,10 +11,12 @@ import (
 	cache "github.com/patrickmn/go-cache"
 )
 
+// Cache implements the dataloader.Cache interface
 type Cache struct {
 	c *cache.Cache
 }
 
+// Get gets a value from the cache
 func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 	v, ok := c.c.Get(key)
 	if ok {
@@ -22,10 +25,12 @@ func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 	return nil, ok
 }
 
+// Set sets a value in the cache
 func (c *Cache) Set(key string, value dataloader.Thunk) {
 	c.c.Set(key, value, 0)
 }
 
+// Delete deletes and item in the cache
 func (c *Cache) Delete(key string) bool {
 	if _, found := c.c.Get(key); found {
 		c.c.Delete(key)
@@ -34,18 +39,19 @@ func (c *Cache) Delete(key string) bool {
 	return false
 }
 
+// Clear clears the cache
 func (c *Cache) Clear() {
 	c.c.Flush()
 }
 
 func main() {
 	// go-cache will automaticlly cleanup expired items on given diration
-	c := cache.New(time.Duration(15*time.Minute), time.Duration(15*time.Minute))
+	c := cache.New(15*time.Minute, 15*time.Minute)
 	cache := &Cache{c}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	// immediately call the future function from loader
-	result, err := loader.Load("some key")()
+	result, err := loader.Load(context.TODO(), "some key")()
 	if err != nil {
 		// handle error
 	}
@@ -53,7 +59,7 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(keys []string) []*dataloader.Result {
+func batchFunc(_ context.Context, keys []string) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
