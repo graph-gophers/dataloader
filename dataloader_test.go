@@ -1,6 +1,7 @@
 package dataloader
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -71,13 +72,32 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("test LoadMany method", func(t *testing.T) {
+	t.Run("test LoadMany returns errors", func(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		future := errorLoader.LoadMany([]string{"1", "2", "3"})
 		_, err := future()
 		if len(err) != 3 {
-			t.Error("loadmany didn't return right number of errors")
+			t.Error("LoadMany didn't return right number of errors")
+		}
+	})
+
+	t.Run("test LoadMany returns len(errors) == len(keys)", func(t *testing.T) {
+		t.Parallel()
+		loader, _ := OneErrorLoader(0)
+		future := loader.LoadMany([]string{"1", "2", "3"})
+		_, err := future()
+		if len(err) != 3 {
+			t.Error("LoadMany didn't return the right number of errors (should match size of input)")
+			return
+		}
+
+		if err[0] == nil {
+			t.Error("Expected an error on the first item loaded")
+		}
+
+		if err[1] != nil || err[2] != nil {
+			t.Error("Expected second and third errors to be nil")
 		}
 	})
 
@@ -442,6 +462,25 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, fmt.Errorf("this is a test error")})
+		}
+		return results
+	}, WithBatchCapacity(max))
+	return identityLoader, &loadCalls
+}
+func OneErrorLoader(max int) (*Loader, *[][]string) {
+	var mu sync.Mutex
+	var loadCalls [][]string
+	identityLoader := NewBatchedLoader(func(keys []string) []*Result {
+		var results []*Result
+		mu.Lock()
+		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
+		for i, key := range keys {
+			var err error
+			if i == 0 {
+				err = errors.New("always error on the first key")
+			}
+			results = append(results, &Result{key, err})
 		}
 		return results
 	}, WithBatchCapacity(max))
