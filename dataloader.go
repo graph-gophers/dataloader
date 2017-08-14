@@ -27,20 +27,21 @@ type Interface interface {
 }
 
 // BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
-// It's important that the length of the input keys matches the length of the ouput results.
+// It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
 type BatchFunc func([]string) []*Result
 
 // Result is the data structure that a BatchFunc returns.
-// It contains the resolved data, and any errors that may have occured while fetching the data.
+// It contains the resolved data, and any errors that may have occurred while fetching the data.
 type Result struct {
 	Data  interface{}
 	Error error
 }
 
-// ResultMany is used by the loadMany method. It contains a list of resolved data and a list of erros // if any occured.
-// Errors will contain the index of the value that errored
+// ResultMany is used by the LoadMany method.
+// It contains a list of resolved data and a list of errors.
+// The lengths of the data list and error list will match, and elements at each index correspond to each other.
 type ResultMany struct {
 	Data  []interface{}
 	Error []error
@@ -82,7 +83,7 @@ type Loader struct {
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
-// After the value it contians is resolved, this function will return the result.
+// After the value it contains is resolved, this function will return the result.
 // This function can be called many times, much like a Promise is other languages.
 // The value will only need to be resolved once so subsequent calls will return immediately.
 type Thunk func() (interface{}, error)
@@ -94,12 +95,6 @@ type ThunkMany func() ([]interface{}, []error)
 type batchRequest struct {
 	key     string
 	channel chan *Result
-}
-
-// this help match the error to the key of a specific index
-type resultError struct {
-	error
-	index int
 }
 
 // Option allows for configuration of Loader fields.
@@ -241,13 +236,9 @@ func (l *Loader) Load(key string) Thunk {
 func (l *Loader) LoadMany(keys []string) ThunkMany {
 	length := len(keys)
 	data := make([]interface{}, length)
+	errors := make([]error, length)
 	c := make(chan *ResultMany, 1)
 	wg := sync.WaitGroup{}
-
-	var errors struct {
-		mu   sync.Mutex
-		list []error
-	}
 
 	wg.Add(length)
 	for i := range keys {
@@ -255,18 +246,14 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 			defer wg.Done()
 			thunk := l.Load(keys[i])
 			result, err := thunk()
-			if err != nil {
-				errors.mu.Lock()
-				errors.list = append(errors.list, resultError{err, i})
-				errors.mu.Unlock()
-			}
 			data[i] = result
+			errors[i] = err
 		}(i)
 	}
 
 	go func() {
 		wg.Wait()
-		c <- &ResultMany{data, errors.list}
+		c <- &ResultMany{data, errors}
 		close(c)
 	}()
 
@@ -375,7 +362,7 @@ func (b *batcher) batch() {
 				const size = 64 << 10
 				buf := make([]byte, size)
 				buf = buf[:runtime.Stack(buf, false)]
-				log.Printf("Dataloder: Panic received in batch function:: %v\n%s", panicErr, buf)
+				log.Printf("Dataloader: Panic received in batch function:: %v\n%s", panicErr, buf)
 			}
 		}()
 		items = b.batchFn(keys)
