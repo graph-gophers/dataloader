@@ -153,16 +153,16 @@ func withSilentLogger() Option {
 	}
 }
 
-// withTracer allows tracing of calls to Load and LoadMany
-func withTracer(tracer Tracer) Option {
+// WithTracer allows tracing of calls to Load and LoadMany
+func WithTracer(tracer Tracer) Option {
 	return func(l *Loader) {
 		l.tracer = tracer
 	}
 }
 
-// withOpenTracingTracer allows tracing of calls to Load and LoadMany
-func withOpenTracingTracer(tracer Tracer) Option {
-	return withTracer(&OpenTracingTracer{})
+// WithOpenTracingTracer allows tracing of calls to Load and LoadMany
+func WithOpenTracingTracer(tracer Tracer) Option {
+	return WithTracer(&OpenTracingTracer{})
 }
 
 // NewBatchedLoader constructs a new Loader with given options.
