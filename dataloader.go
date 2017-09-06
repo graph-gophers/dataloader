@@ -84,6 +84,9 @@ type Loader struct {
 
 	// used by tests to prevent logs
 	silent bool
+
+	// can be set to trace calls to dataloader
+	tracer Tracer
 }
 
 // Thunk is a function that will block until the value (*Result) it contins is resolved.
@@ -150,6 +153,18 @@ func withSilentLogger() Option {
 	}
 }
 
+// withTracer allows tracing of calls to Load and LoadMany
+func withTracer(tracer Tracer) Option {
+	return func(l *Loader) {
+		l.tracer = tracer
+	}
+}
+
+// withOpenTracingTracer allows tracing of calls to Load and LoadMany
+func withOpenTracingTracer(tracer Tracer) Option {
+	return withTracer(&OpenTracingTracer{})
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	loader := &Loader{
@@ -168,11 +183,16 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 		loader.cache = NewCache()
 	}
 
+	if loader.tracer == nil {
+		loader.tracer = &NoopTracer{}
+	}
+
 	return loader
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(ctx context.Context, key string) Thunk {
+func (l *Loader) Load(originalContext context.Context, key string) Thunk {
+	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 	c := make(chan *Result, 1)
 	var result struct {
 		mu    sync.RWMutex
@@ -182,6 +202,7 @@ func (l *Loader) Load(ctx context.Context, key string) Thunk {
 	// lock to prevent duplicate keys coming in before item has been added to cache.
 	l.cacheLock.Lock()
 	if v, ok := l.cache.Get(key); ok {
+		defer finish(v)
 		defer l.cacheLock.Unlock()
 		return v
 	}
@@ -213,7 +234,7 @@ func (l *Loader) Load(ctx context.Context, key string) Thunk {
 	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
-		l.curBatcher = l.newBatcher(l.silent)
+		l.curBatcher = l.newBatcher(l.silent, l.tracer)
 		// start the current batcher batch function
 		go l.curBatcher.batch(ctx)
 		// start a sleeper for the current batcher
@@ -240,11 +261,13 @@ func (l *Loader) Load(ctx context.Context, key string) Thunk {
 	}
 	l.batchLock.Unlock()
 
+	defer finish(thunk)
 	return thunk
 }
 
 // LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
-func (l *Loader) LoadMany(ctx context.Context, keys []string) ThunkMany {
+func (l *Loader) LoadMany(originalContext context.Context, keys []string) ThunkMany {
+	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 	length := len(keys)
 	data := make([]interface{}, length)
 	errors := make([]error, length)
@@ -290,6 +313,7 @@ func (l *Loader) LoadMany(ctx context.Context, keys []string) ThunkMany {
 		return result.value.Data, result.value.Error
 	}
 
+	defer finish(thunkMany)
 	return thunkMany
 }
 
@@ -336,15 +360,17 @@ type batcher struct {
 	batchFn  BatchFunc
 	finished bool
 	silent   bool
+	tracer   Tracer
 }
 
 // newBatcher returns a batcher for the current requests
 // all the batcher methods must be protected by a global batchLock
-func (l *Loader) newBatcher(silent bool) *batcher {
+func (l *Loader) newBatcher(silent bool, tracer Tracer) *batcher {
 	return &batcher{
 		input:   make(chan *batchRequest, l.inputCap),
 		batchFn: l.batchFn,
 		silent:  silent,
+		tracer:  tracer,
 	}
 }
 
@@ -357,17 +383,20 @@ func (b *batcher) end() {
 }
 
 // execute the batch of all items in queue
-func (b *batcher) batch(ctx context.Context) {
+func (b *batcher) batch(originalContext context.Context) {
 	var keys []string
 	var reqs []*batchRequest
+	var items []*Result
+	var panicErr interface{}
 
 	for item := range b.input {
 		keys = append(keys, item.key)
 		reqs = append(reqs, item)
 	}
 
-	var items []*Result
-	var panicErr interface{}
+	ctx, finish := b.tracer.TraceBatch(originalContext, keys)
+	defer finish(items)
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
