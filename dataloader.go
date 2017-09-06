@@ -161,7 +161,7 @@ func WithTracer(tracer Tracer) Option {
 }
 
 // WithOpenTracingTracer allows tracing of calls to Load and LoadMany
-func WithOpenTracingTracer(tracer Tracer) Option {
+func WithOpenTracingTracer() Option {
 	return WithTracer(&OpenTracingTracer{})
 }
 
