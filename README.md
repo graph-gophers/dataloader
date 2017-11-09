@@ -14,8 +14,8 @@ This project is a work in progress. Feedback is encouraged.
 ## Usage
 ```go
 // setup batch function
-batchFn := func(ctx context.Context, keys []string) []dataloader.Result {
-  var results []dataloader.Result
+batchFn := func(ctx context.Context, keys []string) []*dataloader.Result {
+  var results []*dataloader.Result
   // do some aync work to get data for specified keys
   // append to this list resolved values
   return results
@@ -27,7 +27,7 @@ loader := dataloader.NewBatchedLoader(batchFn)
 /**
  * Use loader
  *
- * A thunk is a function returned from a function that is a 
+ * A thunk is a function returned from a function that is a
  * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
  */
