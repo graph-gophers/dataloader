@@ -250,8 +250,8 @@ func TestLoader(t *testing.T) {
 	t.Run("allows primed cache", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
-		identityLoader.Prime("A", "Cached")
 		ctx := context.Background()
+		identityLoader.Prime(ctx, "A", "Cached")
 		future1 := identityLoader.Load(ctx, "1")
 		future2 := identityLoader.Load(ctx, "A")
 
@@ -280,10 +280,10 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		ctx := context.Background()
-		identityLoader.Prime("A", "Cached")
-		identityLoader.Prime("B", "B")
+		identityLoader.Prime(ctx, "A", "Cached")
+		identityLoader.Prime(ctx, "B", "B")
 		future1 := identityLoader.Load(ctx, "1")
-		future2 := identityLoader.Clear("A").Load(ctx, "A")
+		future2 := identityLoader.Clear(ctx, "A").Load(ctx, "A")
 		future3 := identityLoader.Load(ctx, "B")
 
 		_, err := future1()
@@ -334,7 +334,7 @@ func TestLoader(t *testing.T) {
 			t.Errorf("did not batch queries. Expected %#v, got %#v", expected, calls)
 		}
 
-		if _, found := batchOnlyLoader.cache.Get("1"); found {
+		if _, found := batchOnlyLoader.cache.Get(ctx, "1"); found {
 			t.Errorf("did not clear cache after batch. Expected %#v, got %#v", false, found)
 		}
 	})
@@ -343,8 +343,8 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		ctx := context.Background()
-		identityLoader.Prime("A", "Cached")
-		identityLoader.Prime("B", "B")
+		identityLoader.Prime(ctx, "A", "Cached")
+		identityLoader.Prime(ctx, "B", "B")
 
 		identityLoader.ClearAll()
 
@@ -377,12 +377,12 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		ctx := context.Background()
-		identityLoader.Prime("A", "Cached")
-		identityLoader.Prime("B", "B")
+		identityLoader.Prime(ctx, "A", "Cached")
+		identityLoader.Prime(ctx, "B", "B")
 
 		identityLoader.ClearAll()
 
-		future1 := identityLoader.Clear("1").Load(ctx, "1")
+		future1 := identityLoader.Clear(ctx, "1").Load(ctx, "1")
 		future2 := identityLoader.Load(ctx, "A")
 		future3 := identityLoader.Load(ctx, "B")
 
@@ -411,8 +411,8 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		ctx := context.Background()
-		identityLoader.Prime("A", "Cached")
-		identityLoader.Prime("B", "B")
+		identityLoader.Prime(ctx, "A", "Cached")
+		identityLoader.Prime(ctx, "B", "B")
 
 		future1 := identityLoader.Load(ctx, "1")
 		future2 := identityLoader.Load(ctx, "A")

@@ -2,7 +2,10 @@
 
 package dataloader
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // InMemoryCache is an in memory implementation of Cache interface.
 // this simple implementation is well suited for
@@ -23,7 +26,7 @@ func NewCache() *InMemoryCache {
 }
 
 // Set sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(key string, value Thunk) {
+func (c *InMemoryCache) Set(_ context.Context, key string, value Thunk) {
 	c.mu.Lock()
 	c.items[key] = value
 	c.mu.Unlock()
@@ -31,7 +34,7 @@ func (c *InMemoryCache) Set(key string, value Thunk) {
 
 // Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(key string) (Thunk, bool) {
+func (c *InMemoryCache) Get(_ context.Context, key string) (Thunk, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -44,7 +47,7 @@ func (c *InMemoryCache) Get(key string) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(key string) bool {
+func (c *InMemoryCache) Delete(_ context.Context, key string) bool {
 	if _, found := c.Get(key); found {
 		c.mu.Lock()
 		defer c.mu.Unlock()

@@ -40,7 +40,7 @@ if err != nil {
 log.Printf("value: %#v", result)
 ```
 
-## Upgrade from v1
+## Upgrade from v1 to v2
 The only difference between v1 and v2 is that we added use of [context](https://golang.org/pkg/context).
 
 ```diff
@@ -54,6 +54,29 @@ The only difference between v1 and v2 is that we added use of [context](https://
 - type BatchFunc func([]string) []*Result
 + type BatchFunc func(context.Context, []string) []*Result
 ```
+
+## Upgrade from v2 to v3
+```diff
+// dataloader.Interface as added context.Context to methods
+- loader.Prime(key string, value interface{}) Interface
++ loader.Prime(ctx context.Context, key string, value interface{}) Interface
+- loader.Clear(key string) Interface
++ loader.Clear(ctx context.Context, key string) Interface
+```
+
+```diff
+// cache interface as added context.Context to methods
+type Cache interface {
+-	Get(string) (Thunk, bool)
++	Get(context.Context, string) (Thunk, bool)
+-	Set(string, Thunk)
++	Set(context.Context, string, Thunk)
+-	Delete(string) bool
++	Delete(context.Context, string) bool
+	Clear()
+}
+```
+
 
 ### Don't need/want to use context?
 You're welcome to install the v1 version of this library.
