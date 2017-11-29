@@ -16,7 +16,7 @@ type Cache struct {
 }
 
 // Get gets an item from the cache
-func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
+func (c *Cache) Get(_ context.Context, key string) (dataloader.Thunk, bool) {
 	v, ok := c.ARCCache.Get(key)
 	if ok {
 		return v.(dataloader.Thunk), ok
@@ -25,12 +25,12 @@ func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 }
 
 // Set sets an item in the cache
-func (c *Cache) Set(key string, value dataloader.Thunk) {
+func (c *Cache) Set(_ context.Context, key string, value dataloader.Thunk) {
 	c.ARCCache.Add(key, value)
 }
 
 // Delete deletes an item in the cache
-func (c *Cache) Delete(key string) bool {
+func (c *Cache) Delete(_ context.Context, key string) bool {
 	if c.ARCCache.Contains(key) {
 		c.ARCCache.Remove(key)
 		return true

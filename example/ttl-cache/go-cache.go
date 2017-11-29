@@ -17,7 +17,7 @@ type Cache struct {
 }
 
 // Get gets a value from the cache
-func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
+func (c *Cache) Get(_ context.Context, key string) (dataloader.Thunk, bool) {
 	v, ok := c.c.Get(key)
 	if ok {
 		return v.(dataloader.Thunk), ok
@@ -26,12 +26,12 @@ func (c *Cache) Get(key string) (dataloader.Thunk, bool) {
 }
 
 // Set sets a value in the cache
-func (c *Cache) Set(key string, value dataloader.Thunk) {
+func (c *Cache) Set(_ context.Context, key string, value dataloader.Thunk) {
 	c.c.Set(key, value, 0)
 }
 
 // Delete deletes and item in the cache
-func (c *Cache) Delete(key string) bool {
+func (c *Cache) Delete(_ context.Context, key string) bool {
 	if _, found := c.c.Get(key); found {
 		c.c.Delete(key)
 		return true

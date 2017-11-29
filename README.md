@@ -1,5 +1,5 @@
 # DataLoader
-[![GoDoc](https://godoc.org/github.com/nicksrandall/dataloader?status.svg)](https://godoc.org/github.com/nicksrandall/dataloader)
+[![GoDoc](https://godoc.org/gopkg.in/nicksrandall/dataloader.v3?status.svg)](https://godoc.org/github.com/nicksrandall/dataloader)
 [![Build Status](https://travis-ci.org/nicksrandall/dataloader.svg?branch=master)](https://travis-ci.org/nicksrandall/dataloader)
 [![codecov](https://codecov.io/gh/nicksrandall/dataloader/branch/master/graph/badge.svg)](https://codecov.io/gh/nicksrandall/dataloader)
 
@@ -9,7 +9,7 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 This project is a work in progress. Feedback is encouraged.
 
 ## Install
-`go get -u gopkg.in/nicksrandall/dataloader.v2`
+`go get -u gopkg.in/nicksrandall/dataloader.v3`
 
 ## Usage
 ```go
