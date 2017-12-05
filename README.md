@@ -9,7 +9,7 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 This project is a work in progress. Feedback is encouraged.
 
 ## Install
-`go get -u gopkg.in/nicksrandall/dataloader.v3`
+`go get -u gopkg.in/nicksrandall/dataloader.v4`
 
 ## Usage
 ```go
@@ -77,6 +77,31 @@ type Cache interface {
 }
 ```
 
+## Upgrade from v3 to v4
+```diff
+// dataloader.Interface as now allows interace{} as key rather than string
+- loader.Load(context.Context, key string) Thunk
++ loader.Load(ctx context.Context, key interface{}) Thunk
+- loader.LoadMany(context.Context, key []string) ThunkMany
++ loader.LoadMany(ctx context.Context, keys []interface{}) ThunkMany
+- loader.Prime(context.Context, key string, value interface{}) Interface
++ loader.Prime(ctx context.Context, key interface{}, value interface{}) Interface
+- loader.Clear(context.Context, key string) Interface
++ loader.Clear(ctx context.Context, key interface{}) Interface
+```
+
+```diff
+// cache interface now allows interface{} as key instead of string
+type Cache interface {
+-	Get(context.Context, string) (Thunk, bool)
++	Get(context.Context, interface{}) (Thunk, bool)
+-	Set(context.Context, string, Thunk)
++	Set(context.Context, interface{}, Thunk)
+-	Delete(context.Context, string) bool
++	Delete(context.Context, interface{}) bool
+	Clear()
+}
+```
 
 ### Don't need/want to use context?
 You're welcome to install the v1 version of this library.
