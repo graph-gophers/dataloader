@@ -13,18 +13,18 @@ type TraceBatchFinishFunc func([]*Result)
 // Tracer is an interface that may be used to implement tracing.
 type Tracer interface {
 	// TraceLoad will trace the calls to Load
-	TraceLoad(ctx context.Context, key string) (context.Context, TraceLoadFinishFunc)
+	TraceLoad(ctx context.Context, key interface{}) (context.Context, TraceLoadFinishFunc)
 	// TraceLoadMany will trace the calls to LoadMany
-	TraceLoadMany(ctx context.Context, keys []string) (context.Context, TraceLoadManyFinishFunc)
+	TraceLoadMany(ctx context.Context, keys []interface{}) (context.Context, TraceLoadManyFinishFunc)
 	// TraceBatch will trace data loader batches
-	TraceBatch(ctx context.Context, keys []string) (context.Context, TraceBatchFinishFunc)
+	TraceBatch(ctx context.Context, keys []interface{}) (context.Context, TraceBatchFinishFunc)
 }
 
 // OpenTracing Tracer implements a tracer that can be used with the Open Tracing standard.
 type OpenTracingTracer struct{}
 
 // TraceLoad will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenTracingTracer) TraceLoad(ctx context.Context, key string) (context.Context, TraceLoadFinishFunc) {
+func (OpenTracingTracer) TraceLoad(ctx context.Context, key interface{}) (context.Context, TraceLoadFinishFunc) {
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, "Dataloader: load")
 
 	span.SetTag("dataloader.key", key)
@@ -36,7 +36,7 @@ func (OpenTracingTracer) TraceLoad(ctx context.Context, key string) (context.Con
 }
 
 // TraceLoadMany will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenTracingTracer) TraceLoadMany(ctx context.Context, keys []string) (context.Context, TraceLoadManyFinishFunc) {
+func (OpenTracingTracer) TraceLoadMany(ctx context.Context, keys []interface{}) (context.Context, TraceLoadManyFinishFunc) {
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, "Dataloader: loadmany")
 
 	span.SetTag("dataloader.keys", keys)
@@ -48,7 +48,7 @@ func (OpenTracingTracer) TraceLoadMany(ctx context.Context, keys []string) (cont
 }
 
 // TraceBatch will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenTracingTracer) TraceBatch(ctx context.Context, keys []string) (context.Context, TraceBatchFinishFunc) {
+func (OpenTracingTracer) TraceBatch(ctx context.Context, keys []interface{}) (context.Context, TraceBatchFinishFunc) {
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, "Dataloader: batch")
 
 	span.SetTag("dataloader.keys", keys)
@@ -63,16 +63,16 @@ func (OpenTracingTracer) TraceBatch(ctx context.Context, keys []string) (context
 type NoopTracer struct{}
 
 // TraceLoad is a noop function
-func (NoopTracer) TraceLoad(ctx context.Context, key string) (context.Context, TraceLoadFinishFunc) {
+func (NoopTracer) TraceLoad(ctx context.Context, key interface{}) (context.Context, TraceLoadFinishFunc) {
 	return ctx, func(Thunk) {}
 }
 
 // TraceLoadMany is a noop function
-func (NoopTracer) TraceLoadMany(ctx context.Context, keys []string) (context.Context, TraceLoadManyFinishFunc) {
+func (NoopTracer) TraceLoadMany(ctx context.Context, keys []interface{}) (context.Context, TraceLoadManyFinishFunc) {
 	return ctx, func(ThunkMany) {}
 }
 
 // TraceBatch is a noop function
-func (NoopTracer) TraceBatch(ctx context.Context, keys []string) (context.Context, TraceBatchFinishFunc) {
+func (NoopTracer) TraceBatch(ctx context.Context, keys []interface{}) (context.Context, TraceBatchFinishFunc) {
 	return ctx, func(result []*Result) {}
 }

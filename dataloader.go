@@ -20,8 +20,8 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(context.Context, string) Thunk
-	LoadMany(context.Context, []string) ThunkMany
+	Load(context.Context, interface{}) Thunk
+	LoadMany(context.Context, []interface{}) ThunkMany
 	Clear(context.Context, string) Interface
 	ClearAll() Interface
 	Prime(ctx context.Context, key string, value interface{}) Interface
@@ -31,7 +31,7 @@ type Interface interface {
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc func(context.Context, []string) []*Result
+type BatchFunc func(context.Context, []interface{}) []*Result
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occurred while fetching the data.
@@ -100,7 +100,7 @@ type ThunkMany func() ([]interface{}, []error)
 
 // type used to on input channel
 type batchRequest struct {
-	key     string
+	key     interface{}
 	channel chan *Result
 }
 
@@ -191,7 +191,7 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(originalContext context.Context, key string) Thunk {
+func (l *Loader) Load(originalContext context.Context, key interface{}) Thunk {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 
 	c := make(chan *Result, 1)
@@ -267,7 +267,7 @@ func (l *Loader) Load(originalContext context.Context, key string) Thunk {
 }
 
 // LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
-func (l *Loader) LoadMany(originalContext context.Context, keys []string) ThunkMany {
+func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) ThunkMany {
 	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
 	length := len(keys)
@@ -386,7 +386,7 @@ func (b *batcher) end() {
 
 // execute the batch of all items in queue
 func (b *batcher) batch(originalContext context.Context) {
-	var keys []string
+	var keys []interface{}
 	var reqs []*batchRequest
 	var items []*Result
 	var panicErr interface{}

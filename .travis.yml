@@ -1,10 +1,11 @@
 language: go
 
 go:
-  - 1.7
+  - 1.x
 
-before_install:
-  - go get -t -v ./...
+install:
+  - go get -u github.com/golang/dep/...
+  - dep ensure
     
 script: 
   - go test -v -race -coverprofile=coverage.txt -covermode=atomic

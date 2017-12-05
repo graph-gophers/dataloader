@@ -17,8 +17,8 @@ type Cache struct {
 }
 
 // Get gets a value from the cache
-func (c *Cache) Get(_ context.Context, key string) (dataloader.Thunk, bool) {
-	v, ok := c.c.Get(key)
+func (c *Cache) Get(_ context.Context, key interface{}) (dataloader.Thunk, bool) {
+	v, ok := c.c.Get(key.(string))
 	if ok {
 		return v.(dataloader.Thunk), ok
 	}
@@ -26,14 +26,14 @@ func (c *Cache) Get(_ context.Context, key string) (dataloader.Thunk, bool) {
 }
 
 // Set sets a value in the cache
-func (c *Cache) Set(_ context.Context, key string, value dataloader.Thunk) {
-	c.c.Set(key, value, 0)
+func (c *Cache) Set(_ context.Context, key interface{}, value dataloader.Thunk) {
+	c.c.Set(key.(string), value, 0)
 }
 
 // Delete deletes and item in the cache
-func (c *Cache) Delete(_ context.Context, key string) bool {
-	if _, found := c.c.Get(key); found {
-		c.c.Delete(key)
+func (c *Cache) Delete(_ context.Context, key interface{}) bool {
+	if _, found := c.c.Get(key.(string)); found {
+		c.c.Delete(key.(string))
 		return true
 	}
 	return false
@@ -59,7 +59,7 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(_ context.Context, keys []string) []*dataloader.Result {
+func batchFunc(_ context.Context, keys []interface{}) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {

@@ -24,13 +24,13 @@ func NewCache() *InMemoryCache {
 }
 
 // Set sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(_ context.Context, key string, value Thunk) {
+func (c *InMemoryCache) Set(_ context.Context, key interface{}, value Thunk) {
 	c.items.Store(key, value)
 }
 
 // Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(_ context.Context, key string) (Thunk, bool) {
+func (c *InMemoryCache) Get(_ context.Context, key interface{}) (Thunk, bool) {
 	item, found := c.items.Load(key)
 	if !found {
 		return nil, false
@@ -40,7 +40,7 @@ func (c *InMemoryCache) Get(_ context.Context, key string) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(_ context.Context, key string) bool {
+func (c *InMemoryCache) Delete(_ context.Context, key interface{}) bool {
 	if _, found := c.items.Load(key); found {
 		c.items.Delete(key)
 		return true
