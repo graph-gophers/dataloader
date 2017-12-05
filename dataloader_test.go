@@ -94,7 +94,6 @@ func TestLoader(t *testing.T) {
 		ctx := context.Background()
 		future := loader.LoadMany(ctx, []interface{}{"1", "2", "3"})
 		_, err := future()
-		log.Printf("errs: %#v", err)
 		if len(err) != 3 {
 			t.Errorf("LoadMany didn't return right number of errors (should match size of input)")
 		}
@@ -105,6 +104,16 @@ func TestLoader(t *testing.T) {
 
 		if err[1] != nil || err[2] != nil {
 			t.Error("Expected second and third errors to be nil")
+		}
+	})
+
+	t.Run("test LoadMany returns nil []error when no errors occurred", func(t *testing.T) {
+		t.Parallel()
+		loader, _ := IDLoader(0)
+		ctx := context.Background()
+		_, err := loader.LoadMany(ctx, []interface{}{"1", "2", "3"})()
+		if err != nil {
+			t.Errorf("Expected LoadMany() to return nil error slice when no errors occurred")
 		}
 	})
 
@@ -491,7 +500,7 @@ func OneErrorLoader(max int) (*Loader, *[][]interface{}) {
 	var mu sync.Mutex
 	var loadCalls [][]interface{}
 	identityLoader := NewBatchedLoader(func(_ context.Context, keys []interface{}) []*Result {
-		results := make([]*Result, max, max)
+		results := make([]*Result, max)
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()

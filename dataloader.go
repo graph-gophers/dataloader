@@ -270,11 +270,13 @@ func (l *Loader) Load(originalContext context.Context, key interface{}) Thunk {
 func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) ThunkMany {
 	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
-	length := len(keys)
-	data := make([]interface{}, length)
-	errors := make([]error, length)
-	c := make(chan *ResultMany, 1)
-	wg := sync.WaitGroup{}
+	var (
+		length = len(keys)
+		data   = make([]interface{}, length)
+		errors = make([]error, length)
+		c      = make(chan *ResultMany, 1)
+		wg     sync.WaitGroup
+	)
 
 	wg.Add(length)
 	for i := range keys {
@@ -289,7 +291,18 @@ func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) T
 
 	go func() {
 		wg.Wait()
-		c <- &ResultMany{data, errors}
+
+		// errs is nil unless there exists a non-nil error.
+		// This prevents dataloader from returning a slice of all-nil errors.
+		var errs []error
+		for _, e := range errors {
+			if e != nil {
+				errs = errors
+				break
+			}
+		}
+
+		c <- &ResultMany{Data: data, Error: errs}
 		close(c)
 	}()
 
