@@ -14,7 +14,7 @@ This project is a work in progress. Feedback is encouraged.
 ## Usage
 ```go
 // setup batch function
-batchFn := func(ctx context.Context, keys []string) []*dataloader.Result {
+batchFn := func(ctx context.Context, keys []interface{}) []*dataloader.Result {
   var results []*dataloader.Result
   // do some aync work to get data for specified keys
   // append to this list resolved values
