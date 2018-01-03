@@ -16,7 +16,7 @@ type Cache struct {
 }
 
 // Get gets an item from the cache
-func (c *Cache) Get(_ context.Context, key interface{}) (dataloader.Thunk, bool) {
+func (c *Cache) Get(_ context.Context, key dataloader.Key) (dataloader.Thunk, bool) {
 	v, ok := c.ARCCache.Get(key)
 	if ok {
 		return v.(dataloader.Thunk), ok
@@ -25,12 +25,12 @@ func (c *Cache) Get(_ context.Context, key interface{}) (dataloader.Thunk, bool)
 }
 
 // Set sets an item in the cache
-func (c *Cache) Set(_ context.Context, key interface{}, value dataloader.Thunk) {
+func (c *Cache) Set(_ context.Context, key dataloader.Key, value dataloader.Thunk) {
 	c.ARCCache.Add(key, value)
 }
 
 // Delete deletes an item in the cache
-func (c *Cache) Delete(_ context.Context, key interface{}) bool {
+func (c *Cache) Delete(_ context.Context, key dataloader.Key) bool {
 	if c.ARCCache.Contains(key) {
 		c.ARCCache.Remove(key)
 		return true
@@ -50,7 +50,7 @@ func main() {
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
 	// immediately call the future function from loader
-	result, err := loader.Load(context.TODO(), "some key")()
+	result, err := loader.Load(context.TODO(), dataloader.StringKey("some key"))()
 	if err != nil {
 		// handle error
 	}
@@ -58,11 +58,11 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(_ context.Context, keys []interface{}) []*dataloader.Result {
+func batchFunc(_ context.Context, keys dataloader.Keys) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, &dataloader.Result{key, nil})
+		results = append(results, &dataloader.Result{key.String(), nil})
 	}
 	return results
 }

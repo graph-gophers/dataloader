@@ -12,7 +12,7 @@ func main() {
 	cache := &dataloader.NoCache{}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
 
-	result, err := loader.Load(context.TODO(), "some key")()
+	result, err := loader.Load(context.TODO(), dataloader.StringKey("some key"))()
 	if err != nil {
 		// handle error
 	}
@@ -20,11 +20,11 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(_ context.Context, keys []interface{}) []*dataloader.Result {
+func batchFunc(_ context.Context, keys dataloader.Keys) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, &dataloader.Result{key, nil})
+		results = append(results, &dataloader.Result{key.String(), nil})
 	}
 	return results
 }
