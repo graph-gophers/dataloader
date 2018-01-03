@@ -20,18 +20,47 @@ import (
 // different access permissions and consider creating a new instance per
 // web request.
 type Interface interface {
-	Load(context.Context, interface{}) Thunk
-	LoadMany(context.Context, []interface{}) ThunkMany
-	Clear(context.Context, string) Interface
+	Load(context.Context, Keyer) Thunk
+	LoadMany(context.Context, KeyList) ThunkMany
+	Clear(context.Context, Keyer) Interface
 	ClearAll() Interface
-	Prime(ctx context.Context, key interface{}, value interface{}) Interface
+	Prime(ctx context.Context, key Keyer, value interface{}) Interface
+}
+
+// StringKey implements the Key interface for a string
+type StringKey string
+
+// Key is an identity method. Used to implement Key inteface
+func (k StringKey) Key() string { return string(k) }
+
+// String is an identity method. Used to implement Key Value
+func (k StringKey) Value() interface{} { return k }
+
+// Keyer is the interface that all keys need to implement
+type Keyer interface {
+	// Key returns a garunteed unique string that can be used to identify an object
+	Key() string
+	// Value returns the raw, underlaying value of the key
+	Value() interface{}
+}
+
+// KeyList is a slice of keys with some convience methods
+type KeyList []Keyer
+
+// Strings returns the list of strings. One for each "Key" in the list
+func (l KeyList) Strings() []string {
+	list := make([]string, len(l), len(l))
+	for i := range l {
+		list[i] = l[i].Key()
+	}
+	return list
 }
 
 // BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc func(context.Context, []interface{}) []*Result
+type BatchFunc func(context.Context, []string) []*Result
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occurred while fetching the data.
@@ -100,7 +129,7 @@ type ThunkMany func() ([]interface{}, []error)
 
 // type used to on input channel
 type batchRequest struct {
-	key     interface{}
+	key     Keyer
 	channel chan *Result
 }
 
@@ -191,7 +220,7 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 }
 
 // Load load/resolves the given key, returning a channel that will contain the value and error
-func (l *Loader) Load(originalContext context.Context, key interface{}) Thunk {
+func (l *Loader) Load(originalContext context.Context, key Keyer) Thunk {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 
 	c := make(chan *Result, 1)
@@ -267,7 +296,7 @@ func (l *Loader) Load(originalContext context.Context, key interface{}) Thunk {
 }
 
 // LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
-func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) ThunkMany {
+func (l *Loader) LoadMany(originalContext context.Context, keys KeyList) ThunkMany {
 	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
 	var (
@@ -278,15 +307,17 @@ func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) T
 		wg     sync.WaitGroup
 	)
 
+	resolve := func(ctx context.Context, i int) {
+		defer wg.Done()
+		thunk := l.Load(ctx, keys[i])
+		result, err := thunk()
+		data[i] = result
+		errors[i] = err
+	}
+
 	wg.Add(length)
 	for i := range keys {
-		go func(ctx context.Context, i int) {
-			defer wg.Done()
-			thunk := l.Load(ctx, keys[i])
-			result, err := thunk()
-			data[i] = result
-			errors[i] = err
-		}(ctx, i)
+		go resolve(ctx, i)
 	}
 
 	go func() {
@@ -333,7 +364,7 @@ func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) T
 }
 
 // Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
-func (l *Loader) Clear(ctx context.Context, key string) Interface {
+func (l *Loader) Clear(ctx context.Context, key Keyer) Interface {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
 	l.cacheLock.Unlock()
@@ -351,7 +382,7 @@ func (l *Loader) ClearAll() Interface {
 
 // Prime adds the provided key and value to the cache. If the key already exists, no change is made.
 // Returns self for method chaining
-func (l *Loader) Prime(ctx context.Context, key interface{}, value interface{}) Interface {
+func (l *Loader) Prime(ctx context.Context, key Keyer, value interface{}) Interface {
 	if _, ok := l.cache.Get(ctx, key); !ok {
 		thunk := func() (interface{}, error) {
 			return value, nil
@@ -399,13 +430,15 @@ func (b *batcher) end() {
 
 // execute the batch of all items in queue
 func (b *batcher) batch(originalContext context.Context) {
-	var keys []interface{}
-	var reqs []*batchRequest
-	var items []*Result
-	var panicErr interface{}
+	var (
+		keys     = make([]string, 0)
+		reqs     = make([]*batchRequest, 0)
+		items    = make([]*Result, 0)
+		panicErr interface{}
+	)
 
 	for item := range b.input {
-		keys = append(keys, item.key)
+		keys = append(keys, item.key.Key())
 		reqs = append(reqs, item)
 	}
 
