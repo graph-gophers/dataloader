@@ -58,11 +58,11 @@ func main() {
 	fmt.Printf("identity: %s\n", result)
 }
 
-func batchFunc(_ context.Context, keys []string) []*dataloader.Result {
+func batchFunc(_ context.Context, keys dataloader.KeyList) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, &dataloader.Result{key, nil})
+		results = append(results, &dataloader.Result{key.Key(), nil})
 	}
 	return results
 }

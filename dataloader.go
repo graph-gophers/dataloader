@@ -60,7 +60,7 @@ func (l KeyList) Strings() []string {
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc func(context.Context, []string) []*Result
+type BatchFunc func(context.Context, KeyList) []*Result
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occurred while fetching the data.
@@ -431,14 +431,14 @@ func (b *batcher) end() {
 // execute the batch of all items in queue
 func (b *batcher) batch(originalContext context.Context) {
 	var (
-		keys     = make([]string, 0)
+		keys     = make(KeyList, 0)
 		reqs     = make([]*batchRequest, 0)
 		items    = make([]*Result, 0)
 		panicErr interface{}
 	)
 
 	for item := range b.input {
-		keys = append(keys, item.key.Key())
+		keys = append(keys, item.key)
 		reqs = append(reqs, item)
 	}
 

@@ -463,13 +463,13 @@ func TestLoader(t *testing.T) {
 func IDLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		for _, key := range keys {
-			results = append(results, &Result{key, nil})
+			results = append(results, &Result{key.Key(), nil})
 		}
 		return results
 	}, WithBatchCapacity(max))
@@ -478,10 +478,10 @@ func IDLoader(max int) (*Loader, *[][]string) {
 func BatchOnlyLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, nil})
@@ -493,10 +493,10 @@ func BatchOnlyLoader(max int) (*Loader, *[][]string) {
 func ErrorLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, fmt.Errorf("this is a test error")})
@@ -508,10 +508,10 @@ func ErrorLoader(max int) (*Loader, *[][]string) {
 func OneErrorLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		results := make([]*Result, max)
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		for i := range keys {
 			var err error
@@ -526,7 +526,7 @@ func OneErrorLoader(max int) (*Loader, *[][]string) {
 }
 func PanicLoader(max int) (*Loader, *[][]string) {
 	var loadCalls [][]string
-	panicLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	panicLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		panic("Programming error")
 	}, WithBatchCapacity(max), withSilentLogger())
 	return panicLoader, &loadCalls
@@ -534,10 +534,10 @@ func PanicLoader(max int) (*Loader, *[][]string) {
 func BadLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		results = append(results, &Result{keys[0], nil})
 		return results
@@ -548,10 +548,10 @@ func NoCacheLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
 	cache := &NoCache{}
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 		for _, key := range keys {
 			results = append(results, &Result{key, nil})
@@ -566,10 +566,10 @@ func FaultyLoader() (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
 
-	loader := NewBatchedLoader(func(_ context.Context, keys []string) []*Result {
+	loader := NewBatchedLoader(func(_ context.Context, keys KeyList) []*Result {
 		var results []*Result
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Strings())
 		mu.Unlock()
 
 		lastKeyIndex := len(keys) - 1
@@ -591,7 +591,7 @@ func FaultyLoader() (*Loader, *[][]string) {
 ///////////////////////////////////////////////////
 var a = &Avg{}
 
-func batchIdentity(_ context.Context, keys []string) (results []*Result) {
+func batchIdentity(_ context.Context, keys KeyList) (results []*Result) {
 	a.Add(len(keys))
 	for _, key := range keys {
 		results = append(results, &Result{key, nil})
