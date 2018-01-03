@@ -47,8 +47,8 @@ func (c *InMemoryCache) Get(_ context.Context, key interface{}) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(_ context.Context, key interface{}) bool {
-	if _, found := c.Get(key); found {
+func (c *InMemoryCache) Delete(ctx context.Context, key interface{}) bool {
+	if _, found := c.Get(ctx, key); found {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		delete(c.items, key)
