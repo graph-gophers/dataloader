@@ -24,7 +24,7 @@ type Interface interface {
 	LoadMany(context.Context, []interface{}) ThunkMany
 	Clear(context.Context, string) Interface
 	ClearAll() Interface
-	Prime(ctx context.Context, key string, value interface{}) Interface
+	Prime(ctx context.Context, key interface{}, value interface{}) Interface
 }
 
 // BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
@@ -351,7 +351,7 @@ func (l *Loader) ClearAll() Interface {
 
 // Prime adds the provided key and value to the cache. If the key already exists, no change is made.
 // Returns self for method chaining
-func (l *Loader) Prime(ctx context.Context, key string, value interface{}) Interface {
+func (l *Loader) Prime(ctx context.Context, key interface{}, value interface{}) Interface {
 	if _, ok := l.cache.Get(ctx, key); !ok {
 		thunk := func() (interface{}, error) {
 			return value, nil
