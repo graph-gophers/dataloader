@@ -13,7 +13,7 @@ import (
 // for the life of an http request) but it not well suited
 // for long lived cached items.
 type InMemoryCache struct {
-	items map[interface{}]Thunk
+	items map[string]Thunk
 	mu    sync.RWMutex
 }
 
@@ -26,19 +26,19 @@ func NewCache() *InMemoryCache {
 }
 
 // Set sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(_ context.Context, key interface{}, value Thunk) {
+func (c *InMemoryCache) Set(_ context.Context, key Key, value Thunk) {
 	c.mu.Lock()
-	c.items[key] = value
+	c.items[key.String()] = value
 	c.mu.Unlock()
 }
 
 // Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(_ context.Context, key interface{}) (Thunk, bool) {
+func (c *InMemoryCache) Get(_ context.Context, key Key) (Thunk, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	item, found := c.items[key]
+	item, found := c.items[key.String()]
 	if !found {
 		return nil, false
 	}
@@ -51,7 +51,7 @@ func (c *InMemoryCache) Delete(ctx context.Context, key interface{}) bool {
 	if _, found := c.Get(ctx, key); found {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		delete(c.items, key)
+		delete(c.items, key.String())
 		return true
 	}
 	return false
@@ -60,6 +60,6 @@ func (c *InMemoryCache) Delete(ctx context.Context, key interface{}) bool {
 // Clear clears the entire cache
 func (c *InMemoryCache) Clear() {
 	c.mu.Lock()
-	c.items = map[interface{}]Thunk{}
+	c.items = map[string]Thunk{}
 	c.mu.Unlock()
 }
