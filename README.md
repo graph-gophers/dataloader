@@ -9,7 +9,7 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 This project is a work in progress. Feedback is encouraged.
 
 ## Install
-`go get -u gopkg.in/nicksrandall/dataloader.v4`
+`go get -u gopkg.in/nicksrandall/dataloader.v5`
 
 ## Usage
 ```go
@@ -99,6 +99,32 @@ type Cache interface {
 +	Set(context.Context, interface{}, Thunk)
 -	Delete(context.Context, string) bool
 +	Delete(context.Context, interface{}) bool
+	Clear()
+}
+```
+
+## Upgrade from v4 to v5
+```diff
+// dataloader.Interface as now allows interace{} as key rather than string
+- loader.Load(context.Context, key interface{}) Thunk
++ loader.Load(ctx context.Context, key Key) Thunk
+- loader.LoadMany(context.Context, key []interface{}) ThunkMany
++ loader.LoadMany(ctx context.Context, keys Keys) ThunkMany
+- loader.Prime(context.Context, key interface{}, value interface{}) Interface
++ loader.Prime(ctx context.Context, key Key, value interface{}) Interface
+- loader.Clear(context.Context, key interface{}) Interface
++ loader.Clear(ctx context.Context, key Key) Interface
+```
+
+```diff
+// cache interface now allows interface{} as key instead of string
+type Cache interface {
+-	Get(context.Context, interface{}) (Thunk, bool)
++	Get(context.Context, Key) (Thunk, bool)
+-	Set(context.Context, interface{}, Thunk)
++	Set(context.Context, Key, Thunk)
+-	Delete(context.Context, interface{}) bool
++	Delete(context.Context, Key) bool
 	Clear()
 }
 ```
