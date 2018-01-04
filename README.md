@@ -14,7 +14,7 @@ This project is a work in progress. Feedback is encouraged.
 ## Usage
 ```go
 // setup batch function
-batchFn := func(ctx context.Context, keys []interface{}) []*dataloader.Result {
+batchFn := func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
   var results []*dataloader.Result
   // do some aync work to get data for specified keys
   // append to this list resolved values
@@ -31,7 +31,7 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
  */
-thunk := loader.Load(ctx.TODO(), "key1")
+thunk := loader.Load(ctx.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
 result, err := thunk()
 if err != nil {
   // handle data error
