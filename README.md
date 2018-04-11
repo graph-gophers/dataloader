@@ -1,7 +1,6 @@
 # DataLoader
 [![GoDoc](https://godoc.org/gopkg.in/graph-gophers/dataloader.v3?status.svg)](https://godoc.org/github.com/graph-gophers/dataloader)
 [![Build Status](https://travis-ci.org/graph-gophers/dataloader.svg?branch=master)](https://travis-ci.org/graph-gophers/dataloader)
-[![codecov](https://codecov.io/gh/graph-gophers/dataloader/branch/master/graph/badge.svg)](https://codecov.io/gh/graph-gophers/dataloader)
 
 This is an implementation of [Facebook's DataLoader](https://github.com/facebook/dataloader) in Golang.
 
