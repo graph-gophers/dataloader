@@ -19,7 +19,7 @@ type InMemoryCache struct {
 
 // NewCache constructs a new InMemoryCache
 func NewCache() *InMemoryCache {
-	items := make(map[interface{}]Thunk)
+	items := make(map[string]Thunk)
 	return &InMemoryCache{
 		items: items,
 	}
@@ -28,7 +28,7 @@ func NewCache() *InMemoryCache {
 // Set sets the `value` at `key` in the cache
 func (c *InMemoryCache) Set(_ context.Context, key Key, value Thunk) {
 	c.mu.Lock()
-	c.items[key.Key()] = value
+	c.items[key.String()] = value
 	c.mu.Unlock()
 }
 
@@ -38,7 +38,7 @@ func (c *InMemoryCache) Get(_ context.Context, key Key) (Thunk, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	item, found := c.items[key.Key()]
+	item, found := c.items[key.String()]
 	if !found {
 		return nil, false
 	}
@@ -47,11 +47,11 @@ func (c *InMemoryCache) Get(_ context.Context, key Key) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(ctx context.Context, key interface{}) bool {
+func (c *InMemoryCache) Delete(ctx context.Context, key Key) bool {
 	if _, found := c.Get(ctx, key); found {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		delete(c.items, key.Key())
+		delete(c.items, key.String())
 		return true
 	}
 	return false
