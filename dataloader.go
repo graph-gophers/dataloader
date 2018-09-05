@@ -89,7 +89,7 @@ type Loader struct {
 	tracer Tracer
 }
 
-// Thunk is a function that will block until the value (*Result) it contins is resolved.
+// Thunk is a function that will block until the value (*Result) it contains is resolved.
 // After the value it contains is resolved, this function will return the result.
 // This function can be called many times, much like a Promise is other languages.
 // The value will only need to be resolved once so subsequent calls will return immediately.
