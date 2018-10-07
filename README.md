@@ -7,6 +7,11 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 ## Install
 `go get -u github.com/graph-gophers/dataloader`
 
+If you can not install V5 package, you can try `go get -u gopkg.in/nicksrandall/dataloader.v5`. And in you code:
+```go
+import "gopkg.in/nicksrandall/dataloader.v5"
+```
+
 ## Usage
 ```go
 // setup batch function
