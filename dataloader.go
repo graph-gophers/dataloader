@@ -27,7 +27,7 @@ type Interface interface {
 	Prime(ctx context.Context, key Key, value interface{}) Interface
 }
 
-// BatchFunc is a function, which when given a slice of keys (string), returns an slice of `results`.
+// BatchFunc is a function, which when given a slice of keys (string), returns a slice of `results`.
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
