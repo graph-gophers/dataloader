@@ -8,9 +8,9 @@ import (
 )
 
 // InMemoryCache is an in memory implementation of Cache interface.
-// this simple implementation is well suited for
+// This simple implementation is well suited for
 // a "per-request" dataloader (i.e. one that only lives
-// for the life of an http request) but it not well suited
+// for the life of an http request) but it's not well suited
 // for long lived cached items.
 type InMemoryCache struct {
 	items *sync.Map
