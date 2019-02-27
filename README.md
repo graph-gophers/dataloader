@@ -42,7 +42,7 @@ You're welcome to install the v1 version of this library.
 ## Cache
 This implementation contains a very basic cache that is intended only to be used for short lived DataLoaders (i.e. DataLoaders that ony exsist for the life of an http request). You may use your own implementation if you want.
 
-> it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anyting.
+> it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anything.
 
 ## Examples
 There are a few basic examples in the example folder.

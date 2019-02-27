@@ -26,7 +26,7 @@ type StringKey string
 // String is an identity method. Used to implement String interface
 func (k StringKey) String() string { return string(k) }
 
-// String is an identity method. Used to implement Key Raw
+// Raw is an identity method. Used to implement Key Raw
 func (k StringKey) Raw() interface{} { return k }
 
 // NewKeysFromStrings converts a `[]strings` to a `Keys` ([]Key)
