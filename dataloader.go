@@ -241,14 +241,16 @@ func (l *Loader) LoadMany(keys []string) ThunkMany {
 	wg := sync.WaitGroup{}
 
 	wg.Add(length)
-	for i := range keys {
-		go func(i int) {
+	for i, key := range keys {
+		// Request the key serially to ensure the result order is maintained in key order.
+		thunk := l.Load(key)
+
+		go func(i int, thunk Thunk) {
 			defer wg.Done()
-			thunk := l.Load(keys[i])
 			result, err := thunk()
 			data[i] = result
 			errors[i] = err
-		}(i)
+		}(i, thunk)
 	}
 
 	go func() {
