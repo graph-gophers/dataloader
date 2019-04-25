@@ -10,7 +10,6 @@ import "sync"
 // for the life of an http request) but it not well suited
 // for long lived cached items.
 type InMemoryCache struct {
-	mu    sync.Mutex
 	items *sync.Map
 }
 
@@ -48,7 +47,8 @@ func (c *InMemoryCache) Delete(key string) bool {
 
 // Clear clears the entire cache
 func (c *InMemoryCache) Clear() {
-	c.mu.Lock()
-	c.items = &sync.Map{}
-	c.mu.Unlock()
+	c.items.Range(func(key interface{}, _ interface{}) bool {
+		c.items.Delete(key)
+		return true
+	})
 }
