@@ -280,13 +280,16 @@ func (l *Loader) LoadMany(originalContext context.Context, keys []interface{}) T
 
 	wg.Add(length)
 	for i := range keys {
-		go func(ctx context.Context, i int) {
+		// Request the key serially to ensure the result order is maintained in key order.
+		thunk := l.Load(ctx, keys[i])
+
+		go func(ctx context.Context, i int, thunk Thunk) {
 			defer wg.Done()
-			thunk := l.Load(ctx, keys[i])
+
 			result, err := thunk()
 			data[i] = result
 			errors[i] = err
-		}(ctx, i)
+		}(ctx, i, thunk)
 	}
 
 	go func() {

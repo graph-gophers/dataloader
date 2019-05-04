@@ -1,6 +1,9 @@
 package dataloader
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 // The Cache interface. If a custom cache is provided, it must implement this interface.
 type Cache interface {
@@ -8,6 +11,62 @@ type Cache interface {
 	Set(context.Context, interface{}, Thunk)
 	Delete(context.Context, interface{}) bool
 	Clear()
+}
+
+// InMemoryCache is an in memory implementation of Cache interface.
+// This implementation is well suited for a "per-request" dataloader
+// (i.e. one that only lives for the life of an HTTP request)
+// but it is not well suited for long lived cached items.
+type InMemoryCache struct {
+	mu    sync.RWMutex
+	items map[interface{}]Thunk
+}
+
+// NewCache constructs a new InMemoryCache.
+func NewCache() *InMemoryCache {
+	items := make(map[interface{}]Thunk)
+	return &InMemoryCache{
+		items: items,
+	}
+}
+
+// Set the `value` at `key` in the cache.
+func (c *InMemoryCache) Set(_ context.Context, key interface{}, value Thunk) {
+	c.mu.Lock()
+	c.items[key] = value
+	c.mu.Unlock()
+}
+
+// Get the value at `key` if it exists.
+// Returns value (or nil) and whether the value was found.
+func (c *InMemoryCache) Get(_ context.Context, key interface{}) (Thunk, bool) {
+	c.mu.RLock()
+	item, found := c.items[key]
+	c.mu.RUnlock()
+
+	return item, found
+}
+
+// Delete the value at `key` from the cache.
+func (c *InMemoryCache) Delete(ctx context.Context, key interface{}) bool {
+	_, found := c.Get(ctx, key)
+
+	if found {
+		c.mu.Lock()
+		delete(c.items, key)
+		c.mu.Unlock()
+	}
+
+	return found
+}
+
+// Clear the entire cache.
+func (c *InMemoryCache) Clear() {
+	c.mu.Lock()
+	for k := range c.items {
+		delete(c.items, k)
+	}
+	c.mu.Unlock()
 }
 
 // NoCache implements Cache interface where all methods are noops.
@@ -19,10 +78,10 @@ type NoCache struct{}
 func (c *NoCache) Get(context.Context, interface{}) (Thunk, bool) { return nil, false }
 
 // Set is a NOOP
-func (c *NoCache) Set(context.Context, interface{}, Thunk) { return }
+func (c *NoCache) Set(context.Context, interface{}, Thunk) {}
 
 // Delete is a NOOP
 func (c *NoCache) Delete(context.Context, interface{}) bool { return false }
 
 // Clear is a NOOP
-func (c *NoCache) Clear() { return }
+func (c *NoCache) Clear() {}
