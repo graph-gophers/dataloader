@@ -3,31 +3,73 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:43987212a2f16bfacc1a286e9118f212d60c136ed53c6c9477c18921db53140b"
   name = "github.com/hashicorp/golang-lru"
-  packages = [".","simplelru"]
+  packages = [
+    ".",
+    "simplelru",
+  ]
+  pruneopts = ""
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
+  digest = "1:e0419edd44e362e2ab972a6f68c91a20adaa79ff24a6fd511055d1f0fcd93b79"
+  name = "github.com/nicksrandall/dataloader"
+  packages = ["."]
+  pruneopts = ""
+  revision = "78139374585c29dcb97b8f33089ed11959e4be59"
+  version = "v5"
+
+[[projects]]
+  digest = "1:78fb99d6011c2ae6c72f3293a83951311147b12b06a5ffa43abf750c4fab6ac5"
   name = "github.com/opentracing/opentracing-go"
-  packages = [".","log"]
+  packages = [
+    ".",
+    "log",
+  ]
+  pruneopts = ""
   revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
   version = "v1.0.2"
 
 [[projects]]
+  digest = "1:4c0404dc03d974acd5fcd8b8d3ce687b13bd169db032b89275e8b9d77b98ce8c"
   name = "github.com/patrickmn/go-cache"
   packages = ["."]
+  pruneopts = ""
   revision = "a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0"
   version = "v2.1.0"
 
 [[projects]]
+  digest = "1:15322677d41c39ba767c0bcfe258fe2ffeeb1c355069674788418bf9c507e811"
+  name = "go.opencensus.io"
+  packages = [
+    ".",
+    "internal",
+    "trace",
+    "trace/internal",
+    "trace/tracestate",
+  ]
+  pruneopts = ""
+  revision = "9c377598961b706d1542bd2d84d538b5094d596e"
+  version = "v0.22.0"
+
+[[projects]]
   branch = "master"
+  digest = "1:447831205e1c85dbf1e6f97cb8ca54931452c6aff79c630ea091ecbbdc2e921e"
   name = "golang.org/x/net"
   packages = ["context"]
+  pruneopts = ""
   revision = "a8b9294777976932365dabb6640cf1468d95c70f"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a0b8606d9f2ed9df7e69cae570c65c7d7b090bb7a08f58d3535b584693d44da9"
+  input-imports = [
+    "github.com/hashicorp/golang-lru",
+    "github.com/nicksrandall/dataloader",
+    "github.com/opentracing/opentracing-go",
+    "github.com/patrickmn/go-cache",
+    "go.opencensus.io/trace",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

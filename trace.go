@@ -2,8 +2,10 @@ package dataloader
 
 import (
 	"context"
+	"strings"
 
 	opentracing "github.com/opentracing/opentracing-go"
+	opencensus "go.opencensus.io/trace"
 )
 
 type TraceLoadFinishFunc func(Thunk)
@@ -20,7 +22,7 @@ type Tracer interface {
 	TraceBatch(ctx context.Context, keys Keys) (context.Context, TraceBatchFinishFunc)
 }
 
-// OpenTracing Tracer implements a tracer that can be used with the Open Tracing standard.
+// OpenTracingTracer implements a tracer that can be used with the Open Tracing standard.
 type OpenTracingTracer struct{}
 
 // TraceLoad will trace a call to dataloader.LoadMany with Open Tracing
@@ -56,6 +58,45 @@ func (OpenTracingTracer) TraceBatch(ctx context.Context, keys Keys) (context.Con
 	return spanCtx, func(results []*Result) {
 		// TODO: is there anything we should do with the results?
 		span.Finish()
+	}
+}
+
+// OpenCensusTracer implements a tracer that can be used with the OpenCensus standard.
+type OpenCensusTracer struct{}
+
+// TraceLoad will trace a call to dataloader.LoadMany with Open Tracing
+func (OpenCensusTracer) TraceLoad(ctx context.Context, key Key) (context.Context, TraceLoadFinishFunc) {
+	spanCtx, span := opencensus.StartSpan(ctx, "Dataloader: load")
+	span.AddAttributes(
+		opencensus.StringAttribute("dataloader.key", key.String()),
+	)
+	return spanCtx, func(thunk Thunk) {
+		// TODO: is there anything we should do with the results?
+		span.End()
+	}
+}
+
+// TraceLoadMany will trace a call to dataloader.LoadMany with Open Tracing
+func (OpenCensusTracer) TraceLoadMany(ctx context.Context, keys Keys) (context.Context, TraceLoadManyFinishFunc) {
+	spanCtx, span := opencensus.StartSpan(ctx, "Dataloader: loadmany")
+	span.AddAttributes(
+		opencensus.StringAttribute("dataloader.keys", strings.Join(keys.Keys(), ",")),
+	)
+	return spanCtx, func(thunk ThunkMany) {
+		// TODO: is there anything we should do with the results?
+		span.End()
+	}
+}
+
+// TraceBatch will trace a call to dataloader.LoadMany with Open Tracing
+func (OpenCensusTracer) TraceBatch(ctx context.Context, keys Keys) (context.Context, TraceBatchFinishFunc) {
+	spanCtx, span := opencensus.StartSpan(ctx, "Dataloader: batch")
+	span.AddAttributes(
+		opencensus.StringAttribute("dataloader.keys", strings.Join(keys.Keys(), ",")),
+	)
+	return spanCtx, func(results []*Result) {
+		// TODO: is there anything we should do with the results?
+		span.End()
 	}
 }
 

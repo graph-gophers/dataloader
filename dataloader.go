@@ -165,6 +165,11 @@ func WithOpenTracingTracer() Option {
 	return WithTracer(&OpenTracingTracer{})
 }
 
+// WithOpenCensusTracer allows tracing of calls to Load and LoadMany
+func WithOpenCensusTracer() Option {
+	return WithTracer(&OpenCensusTracer{})
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	loader := &Loader{
