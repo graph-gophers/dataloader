@@ -12,7 +12,7 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 // setup batch function
 batchFn := func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
   var results []*dataloader.Result
-  // do some aync work to get data for specified keys
+  // do some async work to get data for specified keys
   // append to this list resolved values
   return results
 }
