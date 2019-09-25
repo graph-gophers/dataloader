@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nicksrandall/dataloader"
+	"github.com/graph-gophers/dataloader"
 )
 
 func main() {
