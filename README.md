@@ -27,7 +27,7 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
  */
-thunk := loader.Load(ctx.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
+thunk := loader.Load(context.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
 result, err := thunk()
 if err != nil {
   // handle data error
