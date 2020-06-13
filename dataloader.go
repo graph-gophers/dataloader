@@ -460,6 +460,13 @@ func (b *batcher) batch(originalContext context.Context) {
 		return
 	}
 
+	// When a batchFunc returns a nil in it's items, we replace those by a Result struct containing an error
+	for key, value := range items {
+		if value == nil {
+			items[key] = &Result{Error: fmt.Errorf("no value for key")}
+		}
+	}
+
 	for i, req := range reqs {
 		req.channel <- items[i]
 		close(req.channel)
