@@ -426,7 +426,7 @@ func (b *batcher) batch(originalContext context.Context) {
 				const size = 64 << 10
 				buf := make([]byte, size)
 				buf = buf[:runtime.Stack(buf, false)]
-				log.Printf("Dataloader: Panic received in batch function:: %v\n%s", panicErr, buf)
+				log.Printf("Dataloader: Panic received in batch function: %v\n%s", panicErr, buf)
 			}
 		}()
 		items = b.batchFn(ctx, keys)
