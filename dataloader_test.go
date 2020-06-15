@@ -211,6 +211,32 @@ func TestLoader(t *testing.T) {
 		// TODO: expect to get some kind of warning
 	})
 
+	t.Run("first result is a nil", func(t *testing.T) {
+		t.Parallel()
+		faultyLoader, _ := LoaderNilInsteadOfResult()
+		ctx := context.Background()
+
+		n := 10
+		reqs := []Thunk{}
+		keys := Keys{}
+		for i := 0; i < n; i++ {
+			key := StringKey(strconv.Itoa(i))
+			reqs = append(reqs, faultyLoader.Load(ctx, key))
+			keys = append(keys, key)
+		}
+
+		for i, future := range reqs {
+			_, err := future()
+			if i == 0 && err == nil {
+				t.Error("expected first result to contain an error")
+			}
+
+			if i != 0 && err != nil {
+				t.Error("expected rest of results not to contain an error")
+			}
+		}
+	})
+
 	t.Run("responds to max batch size", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(2)
@@ -579,6 +605,30 @@ func FaultyLoader() (*Loader, *[][]string) {
 			}
 
 			results = append(results, &Result{key, nil})
+		}
+		return results
+	})
+
+	return loader, &loadCalls
+}
+
+// LoaderNilInsteadOfResult gives a nil result back for the first key.
+func LoaderNilInsteadOfResult() (*Loader, *[][]string) {
+	var mu sync.Mutex
+	var loadCalls [][]string
+
+	loader := NewBatchedLoader(func(_ context.Context, keys Keys) []*Result {
+		var results []*Result
+		mu.Lock()
+		loadCalls = append(loadCalls, keys.Keys())
+		mu.Unlock()
+
+		for i, key := range keys {
+			if i == 0 {
+				results = append(results, nil)
+			} else {
+				results = append(results, &Result{key, nil})
+			}
 		}
 		return results
 	})
