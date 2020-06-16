@@ -1,12 +1,11 @@
 language: go
 
 go:
-  - 1.8
+  - 1.11
   - 1.x
 
 install:
-  - go get -u github.com/golang/dep/...
-  - dep ensure
+  - go mod install
 
 script:
   - go test -v -race -coverprofile=coverage.txt -covermode=atomic

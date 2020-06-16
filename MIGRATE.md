@@ -86,3 +86,10 @@ type Cache interface {
 	Clear()
 }
 ```
+
+## Upgrade from v5 to v6
+No backward incompatible changes, but a major version release because we switched to using Go Modules.
+The preferred import method includes the major version tag.
+```
+import "github.com/graph-gophers/dataloader/v6"
+```

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nicksrandall/dataloader"
+	"github.com/graph-gophers/dataloader/v6"
 	cache "github.com/patrickmn/go-cache"
 )
 

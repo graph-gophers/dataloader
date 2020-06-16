@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/graph-gophers/dataloader/v6"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/nicksrandall/dataloader"
 )
 
 // Cache implements the dataloader.Cache interface

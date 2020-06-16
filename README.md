@@ -5,7 +5,7 @@
 This is an implementation of [Facebook's DataLoader](https://github.com/facebook/dataloader) in Golang.
 
 ## Install
-`go get -u github.com/graph-gophers/dataloader`
+`go get -u github.com/graph-gophers/dataloader/v6`
 
 ## Usage
 ```go
