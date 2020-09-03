@@ -1,13 +1,13 @@
 // This is an exmaple of using go-cache as a long term cache solution for
 // dataloader.
-package main
+package ttl_cache_test
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/nicksrandall/dataloader"
+	dataloader "github.com/graph-gophers/dataloader/v6"
 	cache "github.com/patrickmn/go-cache"
 )
 
@@ -44,7 +44,7 @@ func (c *Cache) Clear() {
 	c.c.Flush()
 }
 
-func main() {
+func ExampleTTLCache() {
 	// go-cache will automaticlly cleanup expired items on given diration
 	c := cache.New(15*time.Minute, 15*time.Minute)
 	cache := &Cache{c}
@@ -56,14 +56,15 @@ func main() {
 		// handle error
 	}
 
-	fmt.Printf("identity: %s\n", result)
+	fmt.Printf("identity: %s", result)
+	// Output: identity: some key
 }
 
 func batchFunc(_ context.Context, keys dataloader.Keys) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, &dataloader.Result{key.String(), nil})
+		results = append(results, &dataloader.Result{Data: key.String()})
 	}
 	return results
 }

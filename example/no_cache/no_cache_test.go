@@ -1,13 +1,13 @@
-package main
+package no_cache_test
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/graph-gophers/dataloader"
+	dataloader "github.com/graph-gophers/dataloader/v6"
 )
 
-func main() {
+func ExampleNoCache() {
 	// go-cache will automaticlly cleanup expired items on given diration
 	cache := &dataloader.NoCache{}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
@@ -17,14 +17,15 @@ func main() {
 		// handle error
 	}
 
-	fmt.Printf("identity: %s\n", result)
+	fmt.Printf("identity: %s", result)
+	// Output: identity: some key
 }
 
 func batchFunc(_ context.Context, keys dataloader.Keys) []*dataloader.Result {
 	var results []*dataloader.Result
 	// do some pretend work to resolve keys
 	for _, key := range keys {
-		results = append(results, &dataloader.Result{key.String(), nil})
+		results = append(results, &dataloader.Result{Data: key.String()})
 	}
 	return results
 }
