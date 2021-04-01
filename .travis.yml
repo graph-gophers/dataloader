@@ -1,11 +1,12 @@
 language: go
 
 go:
+  - 1.16
   - 1.15
   - 1.14
 
-install:
-  - go mod install
+env:
+  - GO111MODULE=on
 
 script:
   - go test -v -race -coverprofile=coverage.txt -covermode=atomic
