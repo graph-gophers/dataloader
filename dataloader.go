@@ -414,7 +414,6 @@ func (b *batcher) batch(originalContext context.Context) {
 	}
 
 	ctx, finish := b.tracer.TraceBatch(originalContext, keys)
-	defer finish(items)
 
 	func() {
 		defer func() {
@@ -431,6 +430,8 @@ func (b *batcher) batch(originalContext context.Context) {
 		}()
 		items = b.batchFn(ctx, keys)
 	}()
+
+	defer finish(items)
 
 	if panicErr != nil {
 		for _, req := range reqs {

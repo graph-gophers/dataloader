@@ -457,6 +457,26 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("tracer's TraceBatch finish func is passed the Result slice", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, _ := IDLoader(0)
+		tracer := new(RecordingTracer)
+		identityLoader.tracer = tracer
+		ctx := context.Background()
+		future := identityLoader.Load(ctx, StringKey("1"))
+		_, err := future()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		calls := tracer.traceBatchFinishCalls
+		inner := []*Result{{Data: "1"}}
+		expected := [][]*Result{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("tracer did not receive expected results. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
 }
 
 // test helpers
@@ -584,6 +604,24 @@ func FaultyLoader() (*Loader, *[][]string) {
 	})
 
 	return loader, &loadCalls
+}
+
+type RecordingTracer struct {
+	traceBatchFinishCalls [][]*Result
+}
+
+func (t *RecordingTracer) TraceLoad(ctx context.Context, key Key) (context.Context, TraceLoadFinishFunc) {
+	return ctx, func(Thunk) {}
+}
+
+func (t *RecordingTracer) TraceLoadMany(ctx context.Context, keys Keys) (context.Context, TraceLoadManyFinishFunc) {
+	return ctx, func(ThunkMany) {}
+}
+
+func (t *RecordingTracer) TraceBatch(ctx context.Context, keys Keys) (context.Context, TraceBatchFinishFunc) {
+	return ctx, func(results []*Result) {
+		t.traceBatchFinishCalls = append(t.traceBatchFinishCalls, results)
+	}
 }
 
 ///////////////////////////////////////////////////
