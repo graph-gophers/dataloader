@@ -329,7 +329,7 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
-	t.Run("allows clearAll values in cache", func(t *testing.T) {
+	t.Run("clears cache on batch with WithClearCacheOnBatch", func(t *testing.T) {
 		t.Parallel()
 		batchOnlyLoader, loadCalls := BatchOnlyLoader(0)
 		ctx := context.Background()
