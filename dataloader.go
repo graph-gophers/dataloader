@@ -368,7 +368,7 @@ func (l *Loader) reset() {
 	l.curBatcher = nil
 
 	if l.clearCacheOnBatch {
-		l.cache.Clear()
+		l.ClearAll()
 	}
 }
 
