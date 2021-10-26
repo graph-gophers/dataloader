@@ -9,7 +9,8 @@ This is an implementation of [Facebook's DataLoader](https://github.com/facebook
 
 ## Usage
 ```go
-// setup batch function
+// setup batch function - the first Context passed to the Loader's Load
+// function will be provided when the batch function is called.
 batchFn := func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
   var results []*dataloader.Result
   // do some async work to get data for specified keys
@@ -26,6 +27,10 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * A thunk is a function returned from a function that is a
  * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
+ *
+ * loader.Load() may be called multiple times for a given batch window.
+ * The first context passed to Load is the object that will be passed
+ * to the batch function.
  */
 thunk := loader.Load(context.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
 result, err := thunk()
