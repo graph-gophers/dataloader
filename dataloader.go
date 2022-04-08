@@ -190,7 +190,9 @@ func NewBatchedLoader(batchFn BatchFunc, opts ...Option) *Loader {
 	return loader
 }
 
-// Load load/resolves the given key, returning a channel that will contain the value and error
+// Load load/resolves the given key, returning a channel that will contain the value and error.
+// The first context passed to this function within a given batch window will be provided to
+// the registered BatchFunc.
 func (l *Loader) Load(originalContext context.Context, key Key) Thunk {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 
