@@ -4,28 +4,39 @@ import (
 	"context"
 	"fmt"
 
-	dataloader "github.com/graph-gophers/dataloader/v6"
+	dataloader "github.com/graph-gophers/dataloader/v7"
 )
 
 func ExampleNoCache() {
-	// go-cache will automaticlly cleanup expired items on given diration
-	cache := &dataloader.NoCache{}
-	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache(cache))
+	type User struct {
+		ID        int
+		Email     string
+		FirstName string
+		LastName  string
+	}
 
-	result, err := loader.Load(context.TODO(), dataloader.StringKey("some key"))()
+	m := map[int]*User{
+		5: &User{ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
+	}
+
+	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {
+		var results []*dataloader.Result[*User]
+		// do some pretend work to resolve keys
+		for _, k := range keys {
+			results = append(results, &dataloader.Result[*User]{Data: m[k]})
+		}
+		return results
+	}
+
+	// go-cache will automaticlly cleanup expired items on given diration
+	cache := &dataloader.NoCache[int, *User]{}
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
+
+	result, err := loader.Load(context.Background(), 5)()
 	if err != nil {
 		// handle error
 	}
 
-	fmt.Printf("identity: %s", result)
-	// Output: identity: some key
-}
-
-func batchFunc(_ context.Context, keys dataloader.Keys) []*dataloader.Result {
-	var results []*dataloader.Result
-	// do some pretend work to resolve keys
-	for _, key := range keys {
-		results = append(results, &dataloader.Result{Data: key.String()})
-	}
-	return results
+	fmt.Printf("result: %+v", result)
+	// Output: result: &{ID:5 Email:john@example.com FirstName:John LastName:Smith}
 }

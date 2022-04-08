@@ -10,33 +10,33 @@ import (
 // a "per-request" dataloader (i.e. one that only lives
 // for the life of an http request) but it's not well suited
 // for long lived cached items.
-type InMemoryCache struct {
-	items map[string]Thunk
+type InMemoryCache[K comparable, V any] struct {
+	items map[K]Thunk[V]
 	mu    sync.RWMutex
 }
 
 // NewCache constructs a new InMemoryCache
-func NewCache() *InMemoryCache {
-	items := make(map[string]Thunk)
-	return &InMemoryCache{
+func NewCache[K comparable, V any]() *InMemoryCache[K, V] {
+	items := make(map[K]Thunk[V])
+	return &InMemoryCache[K, V]{
 		items: items,
 	}
 }
 
 // Set sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(_ context.Context, key Key, value Thunk) {
+func (c *InMemoryCache[K, V]) Set(_ context.Context, key K, value Thunk[V]) {
 	c.mu.Lock()
-	c.items[key.String()] = value
+	c.items[key] = value
 	c.mu.Unlock()
 }
 
 // Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(_ context.Context, key Key) (Thunk, bool) {
+func (c *InMemoryCache[K, V]) Get(_ context.Context, key K) (Thunk[V], bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	item, found := c.items[key.String()]
+	item, found := c.items[key]
 	if !found {
 		return nil, false
 	}
@@ -45,19 +45,19 @@ func (c *InMemoryCache) Get(_ context.Context, key Key) (Thunk, bool) {
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(ctx context.Context, key Key) bool {
+func (c *InMemoryCache[K, V]) Delete(ctx context.Context, key K) bool {
 	if _, found := c.Get(ctx, key); found {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		delete(c.items, key.String())
+		delete(c.items, key)
 		return true
 	}
 	return false
 }
 
 // Clear clears the entire cache
-func (c *InMemoryCache) Clear() {
+func (c *InMemoryCache[K, V]) Clear() {
 	c.mu.Lock()
-	c.items = map[string]Thunk{}
+	c.items = map[K]Thunk[V]{}
 	c.mu.Unlock()
 }
