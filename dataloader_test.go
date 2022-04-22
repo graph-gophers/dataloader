@@ -107,7 +107,7 @@ func TestLoader(t *testing.T) {
 		for _, f := range futures {
 			_, err := f()
 			if err != nil {
-				t.Error("Panic error from batch function is cached")
+				t.Error("Panic error from batch function was cached")
 			}
 		}
 	})
@@ -190,7 +190,7 @@ func TestLoader(t *testing.T) {
 		_, errs = future()
 
 		if len(errs) > 0 {
-			t.Error("Panic error from batch function is cached")
+			t.Error("Panic error from batch function was cached")
 		}
 
 	})
