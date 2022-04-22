@@ -578,7 +578,7 @@ func PanicLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 
 func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
-	panicLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	panicCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
 		if len(keys) > 1 {
 			panic("Programming error")
 		}
@@ -594,12 +594,12 @@ func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 		return returnResult
 
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
-	return panicLoader, &loadCalls
+	return panicCacheLoader, &loadCalls
 }
 
 func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
-	panicLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	errorCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
 		if len(keys) > 1 {
 			var results []*Result[K]
 			for _, key := range keys {
@@ -619,7 +619,7 @@ func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 		return returnResult
 
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
-	return panicLoader, &loadCalls
+	return errorCacheLoader, &loadCalls
 }
 
 func BadLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
