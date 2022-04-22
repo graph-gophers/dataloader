@@ -600,7 +600,6 @@ func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
 	panicLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
 		if len(keys) > 1 {
-			//panic("Programming error")
 			var results []*Result[K]
 			for _, key := range keys {
 				results = append(results, &Result[K]{key, fmt.Errorf("this is a test error")})
