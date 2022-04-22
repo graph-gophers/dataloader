@@ -73,6 +73,7 @@ func TestLoader(t *testing.T) {
 		nextFuture := errorCacheLoader.Load(ctx, "1")
 		_, err := nextFuture()
 
+		// Normal errors should be cached.
 		if err == nil {
 			t.Error("Error from batch function was not cached")
 		}
