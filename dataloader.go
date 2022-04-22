@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -219,6 +220,9 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
+		if result.value.Error != nil && strings.Contains(result.value.Error.Error(), "Panic") {
+			l.Clear(ctx, key)
+		}
 		return result.value.Data, result.value.Error
 	}
 	defer finish(thunk)
