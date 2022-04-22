@@ -4,6 +4,7 @@ package dataloader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"runtime"
@@ -46,6 +47,17 @@ type Result[V any] struct {
 type ResultMany[V any] struct {
 	Data  []V
 	Error []error
+}
+
+// PanicErrorWrapper wraps the error interface.
+// This is used to check if the error is a panic error.
+// We should not cache panic errors.
+type PanicErrorWrapper struct {
+	panicError error
+}
+
+func (p *PanicErrorWrapper) Error() string {
+	return p.panicError.Error()
 }
 
 // Loader implements the dataloader.Interface.
@@ -219,6 +231,10 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
+		var ev *PanicErrorWrapper
+		if result.value.Error != nil && errors.As(result.value.Error, &ev) {
+			l.Clear(ctx, key)
+		}
 		return result.value.Data, result.value.Error
 	}
 	defer finish(thunk)
@@ -431,7 +447,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	if panicErr != nil {
 		for _, req := range reqs {
-			req.channel <- &Result[V]{Error: fmt.Errorf("Panic received in batch function: %v", panicErr)}
+			req.channel <- &Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}}
 			close(req.channel)
 		}
 		return

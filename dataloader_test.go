@@ -55,6 +55,30 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test Load Method cache error", func(t *testing.T) {
+		t.Parallel()
+		errorCacheLoader, _ := ErrorCacheLoader[string](0)
+		ctx := context.Background()
+		futures := []Thunk[string]{}
+		for i := 0; i < 2; i++ {
+			futures = append(futures, errorCacheLoader.Load(ctx, strconv.Itoa(i)))
+		}
+
+		for _, f := range futures {
+			_, err := f()
+			if err == nil {
+				t.Error("Error was not propagated")
+			}
+		}
+		nextFuture := errorCacheLoader.Load(ctx, "1")
+		_, err := nextFuture()
+
+		// Normal errors should be cached.
+		if err == nil {
+			t.Error("Error from batch function was not cached")
+		}
+	})
+
 	t.Run("test Load Method Panic Safety in multiple keys", func(t *testing.T) {
 		t.Parallel()
 		defer func() {
@@ -63,7 +87,7 @@ func TestLoader(t *testing.T) {
 				t.Error("Panic Loader's panic should have been handled'")
 			}
 		}()
-		panicLoader, _ := PanicLoader[string](0)
+		panicLoader, _ := PanicCacheLoader[string](0)
 		futures := []Thunk[string]{}
 		ctx := context.Background()
 		for i := 0; i < 3; i++ {
@@ -73,6 +97,18 @@ func TestLoader(t *testing.T) {
 			_, err := f()
 			if err == nil || err.Error() != "Panic received in batch function: Programming error" {
 				t.Error("Panic was not propagated as an error.")
+			}
+		}
+
+		futures = []Thunk[string]{}
+		for i := 0; i < 3; i++ {
+			futures = append(futures, panicLoader.Load(ctx, strconv.Itoa(1)))
+		}
+
+		for _, f := range futures {
+			_, err := f()
+			if err != nil {
+				t.Error("Panic error from batch function was cached")
 			}
 		}
 	})
@@ -143,13 +179,21 @@ func TestLoader(t *testing.T) {
 				t.Error("Panic Loader's panic should have been handled'")
 			}
 		}()
-		panicLoader, _ := PanicLoader[string](0)
+		panicLoader, _ := PanicCacheLoader[string](0)
 		ctx := context.Background()
-		future := panicLoader.LoadMany(ctx, []string{"1"})
+		future := panicLoader.LoadMany(ctx, []string{"1", "2"})
 		_, errs := future()
-		if len(errs) < 1 || errs[0].Error() != "Panic received in batch function: Programming error" {
+		if len(errs) < 2 || errs[0].Error() != "Panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
+
+		future = panicLoader.LoadMany(ctx, []string{"1"})
+		_, errs = future()
+
+		if len(errs) > 0 {
+			t.Error("Panic error from batch function was cached")
+		}
+
 	})
 
 	t.Run("test LoadMany method", func(t *testing.T) {
@@ -531,6 +575,53 @@ func PanicLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
 	return panicLoader, &loadCalls
 }
+
+func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
+	var loadCalls [][]K
+	panicCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+		if len(keys) > 1 {
+			panic("Programming error")
+		}
+
+		returnResult := make([]*Result[K], len(keys))
+		for idx := range returnResult {
+			returnResult[idx] = &Result[K]{
+				keys[0],
+				nil,
+			}
+		}
+
+		return returnResult
+
+	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
+	return panicCacheLoader, &loadCalls
+}
+
+func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
+	var loadCalls [][]K
+	errorCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+		if len(keys) > 1 {
+			var results []*Result[K]
+			for _, key := range keys {
+				results = append(results, &Result[K]{key, fmt.Errorf("this is a test error")})
+			}
+			return results
+		}
+
+		returnResult := make([]*Result[K], len(keys))
+		for idx := range returnResult {
+			returnResult[idx] = &Result[K]{
+				keys[0],
+				nil,
+			}
+		}
+
+		return returnResult
+
+	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
+	return errorCacheLoader, &loadCalls
+}
+
 func BadLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
