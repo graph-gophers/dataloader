@@ -4,9 +4,9 @@ package dataloader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -231,7 +231,8 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
-		if result.value.Error != nil && reflect.TypeOf(result.value.Error) == reflect.TypeOf(&PanicErrorWrapper{}) {
+		var ev *PanicErrorWrapper
+		if result.value.Error != nil && errors.As(result.value.Error, &ev) {
 			l.Clear(ctx, key)
 		}
 		return result.value.Data, result.value.Error
