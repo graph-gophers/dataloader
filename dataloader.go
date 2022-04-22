@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -47,6 +47,14 @@ type Result[V any] struct {
 type ResultMany[V any] struct {
 	Data  []V
 	Error []error
+}
+
+type PanicError struct {
+	panicError error
+}
+
+func (p *PanicError) Error() string {
+	return p.panicError.Error()
 }
 
 // Loader implements the dataloader.Interface.
@@ -220,7 +228,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
-		if result.value.Error != nil && strings.Contains(result.value.Error.Error(), "Panic") {
+		if result.value.Error != nil && reflect.TypeOf(result.value.Error) == reflect.TypeOf(&PanicError{}) {
 			l.Clear(ctx, key)
 		}
 		return result.value.Data, result.value.Error
@@ -435,7 +443,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	if panicErr != nil {
 		for _, req := range reqs {
-			req.channel <- &Result[V]{Error: fmt.Errorf("Panic received in batch function: %v", panicErr)}
+			req.channel <- &Result[V]{Error: &PanicError{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}}
 			close(req.channel)
 		}
 		return

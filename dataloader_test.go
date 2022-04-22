@@ -55,6 +55,29 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test Load Method cache error", func(t *testing.T) {
+		t.Parallel()
+		errorCacheLoader, _ := ErrorCacheLoader[string](0)
+		ctx := context.Background()
+		futures := []Thunk[string]{}
+		for i := 0; i < 2; i++ {
+			futures = append(futures, errorCacheLoader.Load(ctx, strconv.Itoa(i)))
+		}
+
+		for _, f := range futures {
+			_, err := f()
+			if err == nil {
+				t.Error("Error was not propagated")
+			}
+		}
+		nextFuture := errorCacheLoader.Load(ctx, "1")
+		_, err := nextFuture()
+
+		if err == nil {
+			t.Error("Error from batch function was not cached")
+		}
+	})
+
 	t.Run("test Load Method Panic Safety in multiple keys", func(t *testing.T) {
 		t.Parallel()
 		defer func() {
@@ -572,6 +595,33 @@ func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
 	return panicLoader, &loadCalls
 }
+
+func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
+	var loadCalls [][]K
+	panicLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+		if len(keys) > 1 {
+			//panic("Programming error")
+			var results []*Result[K]
+			for _, key := range keys {
+				results = append(results, &Result[K]{key, fmt.Errorf("this is a test error")})
+			}
+			return results
+		}
+
+		returnResult := make([]*Result[K], len(keys))
+		for idx := range returnResult {
+			returnResult[idx] = &Result[K]{
+				keys[0],
+				nil,
+			}
+		}
+
+		return returnResult
+
+	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
+	return panicLoader, &loadCalls
+}
+
 func BadLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
