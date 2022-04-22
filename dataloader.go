@@ -49,11 +49,14 @@ type ResultMany[V any] struct {
 	Error []error
 }
 
-type PanicError struct {
+// PanicErrorWrapper wraps the error interface.
+// This is used to check if the error is a panic error.
+// We should not cache panic errors.
+type PanicErrorWrapper struct {
 	panicError error
 }
 
-func (p *PanicError) Error() string {
+func (p *PanicErrorWrapper) Error() string {
 	return p.panicError.Error()
 }
 
@@ -228,7 +231,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		}
 		result.mu.RLock()
 		defer result.mu.RUnlock()
-		if result.value.Error != nil && reflect.TypeOf(result.value.Error) == reflect.TypeOf(&PanicError{}) {
+		if result.value.Error != nil && reflect.TypeOf(result.value.Error) == reflect.TypeOf(&PanicErrorWrapper{}) {
 			l.Clear(ctx, key)
 		}
 		return result.value.Data, result.value.Error
@@ -443,7 +446,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	if panicErr != nil {
 		for _, req := range reqs {
-			req.channel <- &Result[V]{Error: &PanicError{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}}
+			req.channel <- &Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}}
 			close(req.channel)
 		}
 		return
