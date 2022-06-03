@@ -28,7 +28,7 @@ func ExampleNoCache() {
 		return results
 	}
 
-	// go-cache will automaticlly cleanup expired items on given diration
+	// go-cache will automatically cleanup expired items on given duration
 	cache := &dataloader.NoCache[int, *User]{}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
 

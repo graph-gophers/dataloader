@@ -1,4 +1,4 @@
-// Package dataloader is an implimentation of facebook's dataloader in go.
+// Package dataloader is an implementation of facebook's dataloader in go.
 // See https://github.com/facebook/dataloader for more information
 package dataloader
 
@@ -242,7 +242,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	l.cache.Set(ctx, key, thunk)
 	l.cacheLock.Unlock()
 
-	// this is sent to batch fn. It contains the key and the channel to return the
+	// this is sent to batch fn. It contains the key and the channel to return
 	// the result on
 	req := &batchRequest[K, V]{key, c}
 
@@ -279,7 +279,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	return thunk
 }
 
-// LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
+// LoadMany loads multiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
 func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) ThunkMany[V] {
 	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
@@ -347,7 +347,7 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 	return thunkMany
 }
 
-// Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
+// Clear clears the value at `key` from the cache, it it exists. Returns self for method chaining
 func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
