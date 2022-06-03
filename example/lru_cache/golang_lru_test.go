@@ -52,7 +52,7 @@ func ExampleGolangLRU() {
 	}
 
 	m := map[int]*User{
-		5: &User{ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
+		5: {ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
 	}
 
 	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {

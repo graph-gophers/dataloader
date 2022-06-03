@@ -694,7 +694,7 @@ func batchIdentity[K comparable](_ context.Context, keys []K) (results []*Result
 var _ctx = context.Background()
 
 func BenchmarkLoader(b *testing.B) {
-	UserLoader := NewBatchedLoader[string, string](batchIdentity[string])
+	UserLoader := NewBatchedLoader(batchIdentity[string])
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		UserLoader.Load(_ctx, (strconv.Itoa(i)))
