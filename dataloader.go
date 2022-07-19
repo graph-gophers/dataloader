@@ -1,4 +1,4 @@
-// Package dataloader is an implimentation of facebook's dataloader in go.
+// Package dataloader is an implementation of facebook's dataloader in go.
 // See https://github.com/facebook/dataloader for more information
 package dataloader
 
@@ -103,14 +103,14 @@ type Loader[K comparable, V any] struct {
 
 // Thunk is a function that will block until the value (*Result) it contains is resolved.
 // After the value it contains is resolved, this function will return the result.
-// This function can be called many times, much like a Promise is other languages.
+// This function can be called many times, much like a Promise in other languages.
 // The value will only need to be resolved once so subsequent calls will return immediately.
 type Thunk[V any] func() (V, error)
 
 // ThunkMany is much like the Thunk func type but it contains a list of results.
 type ThunkMany[V any] func() ([]V, []error)
 
-// type used to on input channel
+// type used on input channel
 type batchRequest[K comparable, V any] struct {
 	key     K
 	channel chan *Result[V]
@@ -347,7 +347,7 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 	return thunkMany
 }
 
-// Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
+// Clear clears the value at `key` from the cache, it it exsits. Returns self for method chaining
 func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)

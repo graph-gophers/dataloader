@@ -38,7 +38,7 @@ func (c *cache[K, V]) Delete(_ context.Context, key K) bool {
 	return false
 }
 
-// Clear cleasrs the cache
+// Clear clears the cache
 func (c *cache[K, V]) Clear() {
 	c.ARCCache.Purge()
 }
