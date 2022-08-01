@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	dataloader "github.com/graph-gophers/dataloader/v7"
+	dataloader "github.com/graph-gophers/dataloader/v8"
 )
 
 func ExampleNoCache() {
@@ -16,23 +16,22 @@ func ExampleNoCache() {
 	}
 
 	m := map[int]*User{
-		5: &User{ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
+		5: {ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
 	}
 
-	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {
+	batchFunc := func(_ context.Context, keys dataloader.Keys[int]) []*dataloader.Result[*User] {
 		var results []*dataloader.Result[*User]
 		// do some pretend work to resolve keys
 		for _, k := range keys {
-			results = append(results, &dataloader.Result[*User]{Data: m[k]})
+			results = append(results, &dataloader.Result[*User]{Data: m[k.Raw()]})
 		}
 		return results
 	}
 
-	// go-cache will automaticlly cleanup expired items on given diration
 	cache := &dataloader.NoCache[int, *User]{}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
 
-	result, err := loader.Load(context.Background(), 5)()
+	result, err := loader.Load(context.Background(), dataloader.KeyOf(5))()
 	if err != nil {
 		// handle error
 	}

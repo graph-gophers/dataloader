@@ -1,4 +1,4 @@
-// Package dataloader is an implimentation of facebook's dataloader in go.
+// Package dataloader is an implementation of facebook's dataloader in go.
 // See https://github.com/facebook/dataloader for more information
 package dataloader
 
@@ -20,19 +20,19 @@ import (
 // used in long-lived applications or those which serve many users with
 // different access permissions and consider creating a new instance per
 // web request.
-type Interface[K comparable, V any] interface {
-	Load(context.Context, K) Thunk[V]
-	LoadMany(context.Context, []K) ThunkMany[V]
-	Clear(context.Context, K) Interface[K, V]
+type Interface[K any, V any] interface {
+	Load(context.Context, Key[K]) Thunk[V]
+	LoadMany(context.Context, Keys[K]) ThunkMany[V]
+	Clear(context.Context, Key[K]) Interface[K, V]
 	ClearAll() Interface[K, V]
-	Prime(ctx context.Context, key K, value V) Interface[K, V]
+	Prime(ctx context.Context, key Key[K], value V) Interface[K, V]
 }
 
 // BatchFunc is a function, which when given a slice of keys (string), returns a slice of `results`.
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc[K comparable, V any] func(context.Context, []K) []*Result[V]
+type BatchFunc[K any, V any] func(context.Context, Keys[K]) []*Result[V]
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occurred while fetching the data.
@@ -61,7 +61,7 @@ func (p *PanicErrorWrapper) Error() string {
 }
 
 // Loader implements the dataloader.Interface.
-type Loader[K comparable, V any] struct {
+type Loader[K any, V any] struct {
 	// the batch function to be used by this loader
 	batchFn BatchFunc[K, V]
 
@@ -111,30 +111,30 @@ type Thunk[V any] func() (V, error)
 type ThunkMany[V any] func() ([]V, []error)
 
 // type used to on input channel
-type batchRequest[K comparable, V any] struct {
-	key     K
+type batchRequest[K any, V any] struct {
+	key     Key[K]
 	channel chan *Result[V]
 }
 
 // Option allows for configuration of Loader fields.
-type Option[K comparable, V any] func(*Loader[K, V])
+type Option[K any, V any] func(*Loader[K, V])
 
 // WithCache sets the BatchedLoader cache. Defaults to InMemoryCache if a Cache is not set.
-func WithCache[K comparable, V any](c Cache[K, V]) Option[K, V] {
+func WithCache[K any, V any](c Cache[K, V]) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.cache = c
 	}
 }
 
 // WithBatchCapacity sets the batch capacity. Default is 0 (unbounded).
-func WithBatchCapacity[K comparable, V any](c int) Option[K, V] {
+func WithBatchCapacity[K any, V any](c int) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.batchCap = c
 	}
 }
 
 // WithInputCapacity sets the input capacity. Default is 1000.
-func WithInputCapacity[K comparable, V any](c int) Option[K, V] {
+func WithInputCapacity[K any, V any](c int) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.inputCap = c
 	}
@@ -142,7 +142,7 @@ func WithInputCapacity[K comparable, V any](c int) Option[K, V] {
 
 // WithWait sets the amount of time to wait before triggering a batch.
 // Default duration is 16 milliseconds.
-func WithWait[K comparable, V any](d time.Duration) Option[K, V] {
+func WithWait[K any, V any](d time.Duration) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.wait = d
 	}
@@ -150,7 +150,7 @@ func WithWait[K comparable, V any](d time.Duration) Option[K, V] {
 
 // WithClearCacheOnBatch allows batching of items but no long term caching.
 // It accomplishes this by clearing the cache after each batch operation.
-func WithClearCacheOnBatch[K comparable, V any]() Option[K, V] {
+func WithClearCacheOnBatch[K any, V any]() Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.cacheLock.Lock()
 		l.clearCacheOnBatch = true
@@ -159,21 +159,21 @@ func WithClearCacheOnBatch[K comparable, V any]() Option[K, V] {
 }
 
 // withSilentLogger turns of log messages. It's used by the tests
-func withSilentLogger[K comparable, V any]() Option[K, V] {
+func withSilentLogger[K any, V any]() Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.silent = true
 	}
 }
 
 // WithTracer allows tracing of calls to Load and LoadMany
-func WithTracer[K comparable, V any](tracer Tracer[K, V]) Option[K, V] {
+func WithTracer[K any, V any](tracer Tracer[K, V]) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.tracer = tracer
 	}
 }
 
 // NewBatchedLoader constructs a new Loader with given options.
-func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Option[K, V]) *Loader[K, V] {
+func NewBatchedLoader[K any, V any](batchFn BatchFunc[K, V], opts ...Option[K, V]) *Loader[K, V] {
 	loader := &Loader[K, V]{
 		batchFn:  batchFn,
 		inputCap: 1000,
@@ -197,10 +197,10 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 	return loader
 }
 
-// Load load/resolves the given key, returning a channel that will contain the value and error.
+// Load loads/resolves the given key, returning a channel that will contain the value and error.
 // The first context passed to this function within a given batch window will be provided to
 // the registered BatchFunc.
-func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
+func (l *Loader[K, V]) Load(originalContext context.Context, key Key[K]) Thunk[V] {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 
 	c := make(chan *Result[V], 1)
@@ -242,8 +242,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	l.cache.Set(ctx, key, thunk)
 	l.cacheLock.Unlock()
 
-	// this is sent to batch fn. It contains the key and the channel to return the
-	// the result on
+	// this is sent to batch fn. It contains the key and the channel to return the result on
 	req := &batchRequest[K, V]{key, c}
 
 	l.batchLock.Lock()
@@ -279,8 +278,8 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	return thunk
 }
 
-// LoadMany loads mulitiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
-func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) ThunkMany[V] {
+// LoadMany loads multiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
+func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys Keys[K]) ThunkMany[V] {
 	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
 	var (
@@ -347,8 +346,8 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 	return thunkMany
 }
 
-// Clear clears the value at `key` from the cache, it it exsits. Returs self for method chaining
-func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
+// Clear clears the value at `key` from the cache, if it exists. Returns self for method chaining
+func (l *Loader[K, V]) Clear(ctx context.Context, key Key[K]) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
 	l.cacheLock.Unlock()
@@ -366,7 +365,7 @@ func (l *Loader[K, V]) ClearAll() Interface[K, V] {
 
 // Prime adds the provided key and value to the cache. If the key already exists, no change is made.
 // Returns self for method chaining
-func (l *Loader[K, V]) Prime(ctx context.Context, key K, value V) Interface[K, V] {
+func (l *Loader[K, V]) Prime(ctx context.Context, key Key[K], value V) Interface[K, V] {
 	if _, ok := l.cache.Get(ctx, key); !ok {
 		thunk := func() (V, error) {
 			return value, nil
@@ -385,7 +384,7 @@ func (l *Loader[K, V]) reset() {
 	}
 }
 
-type batcher[K comparable, V any] struct {
+type batcher[K any, V any] struct {
 	input    chan *batchRequest[K, V]
 	batchFn  BatchFunc[K, V]
 	finished bool
@@ -415,7 +414,7 @@ func (b *batcher[K, V]) end() {
 // execute the batch of all items in queue
 func (b *batcher[K, V]) batch(originalContext context.Context) {
 	var (
-		keys     = make([]K, 0)
+		keys     = make(Keys[K], 0)
 		reqs     = make([]*batchRequest[K, V], 0)
 		items    = make([]*Result[V], 0)
 		panicErr interface{}
