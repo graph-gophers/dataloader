@@ -1,4 +1,4 @@
-// package ttl_cache_test contains an exmaple of using go-cache as a long term cache solution for dataloader.
+// package ttl_cache_test contains an example of using go-cache as a long term cache solution for dataloader.
 package ttl_cache_test
 
 import (
@@ -6,20 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	dataloader "github.com/graph-gophers/dataloader/v7"
+	dataloader "github.com/graph-gophers/dataloader/v8"
 
 	cache "github.com/patrickmn/go-cache"
 )
 
 // Cache implements the dataloader.Cache interface
-type Cache[K comparable, V any] struct {
+type Cache[K any, V any] struct {
 	c *cache.Cache
 }
 
 // Get gets a value from the cache
-func (c *Cache[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) {
-	k := fmt.Sprintf("%v", key) // convert the key to string because the underlying library doesn't support Generics yet
-	v, ok := c.c.Get(k)
+func (c *Cache[K, V]) Get(_ context.Context, key dataloader.Key[K]) (dataloader.Thunk[V], bool) {
+	v, ok := c.c.Get(key.String())
 	if ok {
 		return v.(dataloader.Thunk[V]), ok
 	}
@@ -27,14 +26,13 @@ func (c *Cache[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) 
 }
 
 // Set sets a value in the cache
-func (c *Cache[K, V]) Set(_ context.Context, key K, value dataloader.Thunk[V]) {
-	k := fmt.Sprintf("%v", key) // convert the key to string because the underlying library doesn't support Generics yet
-	c.c.Set(k, value, 0)
+func (c *Cache[K, V]) Set(_ context.Context, key dataloader.Key[K], value dataloader.Thunk[V]) {
+	c.c.Set(key.String(), value, 0)
 }
 
 // Delete deletes and item in the cache
-func (c *Cache[K, V]) Delete(_ context.Context, key K) bool {
-	k := fmt.Sprintf("%v", key) // convert the key to string because the underlying library doesn't support Generics yet
+func (c *Cache[K, V]) Delete(_ context.Context, key dataloader.Key[K]) bool {
+	k := key.String()
 	if _, found := c.c.Get(k); found {
 		c.c.Delete(k)
 		return true
@@ -56,25 +54,25 @@ func ExampleTTLCache() {
 	}
 
 	m := map[int]*User{
-		5: &User{ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
+		5: {ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
 	}
 
-	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {
+	batchFunc := func(_ context.Context, keys dataloader.Keys[int]) []*dataloader.Result[*User] {
 		var results []*dataloader.Result[*User]
 		// do some pretend work to resolve keys
 		for _, k := range keys {
-			results = append(results, &dataloader.Result[*User]{Data: m[k]})
+			results = append(results, &dataloader.Result[*User]{Data: m[k.Raw()]})
 		}
 		return results
 	}
 
-	// go-cache will automaticlly cleanup expired items on given diration
+	// go-cache will automatically remove expired items on given duration
 	c := cache.New(15*time.Minute, 15*time.Minute)
-	cache := &Cache[int, *User]{c}
-	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
+	wrapCache := &Cache[int, *User]{c}
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](wrapCache))
 
 	// immediately call the future function from loader
-	result, err := loader.Load(context.Background(), 5)()
+	result, err := loader.Load(context.Background(), dataloader.KeyOf(5))()
 	if err != nil {
 		// handle error
 	}
