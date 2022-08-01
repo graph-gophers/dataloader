@@ -32,7 +32,7 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * The first context passed to Load is the object that will be passed
  * to the batch function.
  */
-thunk := loader.Load(context.TODO(), dataloader.KeyOf("key1")) // KeyOf is a convenience method that make wraps any comparable type to implement `Key` interface
+thunk := loader.Load(context.TODO(), dataloader.KeyOf("key1")) // KeyOf is a convenience method that wraps any comparable type to implement `Key` interface
 result, err := thunk()
 if err != nil {
   // handle data error
@@ -49,11 +49,12 @@ Please feel free to use `v6` version of this library.
 
 ### Don't need/want to use Key/Keys interface?
 Just use the `v7` version of this library. This completely removes the need for the `Key` interface, but it limits 
-the key type parameter to `comparable` types only, whereas `v8` allows `any` type, as long as it is wrapped `Key`, and
-exports itself as `string`.  
+the key type parameter to `comparable` types only, whereas `v8` allows `any` type, as long as it is wrapped as `Key`,
+and exports itself as `string`.  
 
 ## Cache
-This implementation contains a very basic cache that is intended only to be used for short lived DataLoaders (i.e. DataLoaders that only exist for the life of an http request). You may use your own implementation if you want.
+This implementation contains a very basic cache that is intended only to be used for short-lived DataLoaders 
+(i.e. DataLoaders that only exist for the life of a http request). You may use your own implementation if you want.
 
 > it also has a `NoCache` type that implements the cache interface but all methods are noop. If you do not wish to cache anything.
 
