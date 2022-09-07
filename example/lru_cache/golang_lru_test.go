@@ -38,7 +38,7 @@ func (c *cache[K, V]) Delete(_ context.Context, key K) bool {
 	return false
 }
 
-// Clear cleasrs the cache
+// Clear clears the cache
 func (c *cache[K, V]) Clear() {
 	c.ARCCache.Purge()
 }
@@ -64,7 +64,7 @@ func ExampleGolangLRU() {
 		return results
 	}
 
-	// go-cache will automaticlly cleanup expired items on given duration.
+	// go-cache will automatically cleanup expired items on given duration.
 	c, _ := lru.NewARC(100)
 	cache := &cache[int, *User]{ARCCache: c}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))

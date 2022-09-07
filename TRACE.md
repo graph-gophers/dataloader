@@ -1,6 +1,6 @@
 # Adding a new trace backend.
 
-If you whant to add a new tracing backend all you need to do is implement the
+If you want to add a new tracing backend all you need to do is implement the
 `Tracer` interface and pass it as an option to the dataloader on initialization.
 
 As an example, this is how you could implement it to an OpenCensus backend.

@@ -1,4 +1,4 @@
-// package ttl_cache_test contains an exmaple of using go-cache as a long term cache solution for dataloader.
+// package ttl_cache_test contains an example of using go-cache as a long term cache solution for dataloader.
 package ttl_cache_test
 
 import (
@@ -68,7 +68,7 @@ func ExampleTTLCache() {
 		return results
 	}
 
-	// go-cache will automaticlly cleanup expired items on given diration
+	// go-cache will automatically cleanup expired items on given duration
 	c := cache.New(15*time.Minute, 15*time.Minute)
 	cache := &Cache[int, *User]{c}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
