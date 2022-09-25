@@ -459,7 +459,38 @@ func TestLoader(t *testing.T) {
 
 }
 
+func TestTracer(t *testing.T) {
+	t.Run("TraceBatch should receive the right item", func(t *testing.T) {
+		tracer := &SpyTracer{batchTraceRChan: make(chan []*Result, 10)}
+		identityLoader, _ := IDLoader(0)
+		identityLoader.tracer = tracer
+		ctx := context.Background()
+		future := identityLoader.Load(ctx, StringKey("1"))
+		_, _ = future()
+		r := <-tracer.batchTraceRChan
+		if len(r) != 1 {
+			t.Errorf("did not call TraceBatch with right number of results. Expected 1, got %d", len(r))
+		} else if r[0].Error != nil {
+			t.Error(r[0].Error)
+		} else if r[0].Data != "1" {
+			t.Errorf("did not call TraceBatch with the right value. Expected \"1\", got %#v", r[0].Data)
+		}
+	})
+}
+
 // test helpers
+type SpyTracer struct {
+	NoopTracer
+
+	batchTraceRChan chan []*Result
+}
+
+func (t *SpyTracer) TraceBatch(ctx context.Context, keys Keys) (context.Context, TraceBatchFinishFunc) {
+	return ctx, func(r []*Result) {
+		t.batchTraceRChan <- r
+	}
+}
+
 func IDLoader(max int) (*Loader, *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
