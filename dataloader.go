@@ -126,6 +126,10 @@ func WithCache[K comparable, V any](c Cache[K, V]) Option[K, V] {
 	}
 }
 
+func WithNoCache[K comparable, V any]() Option[K, V] {
+	return WithCache[K, V](&NoCache[K, V]{})
+}
+
 // WithBatchCapacity sets the batch capacity. Default is 0 (unbounded).
 func WithBatchCapacity[K comparable, V any](c int) Option[K, V] {
 	return func(l *Loader[K, V]) {

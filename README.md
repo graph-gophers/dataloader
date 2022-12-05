@@ -5,21 +5,27 @@
 This is an implementation of [Facebook's DataLoader](https://github.com/facebook/dataloader) in Golang.
 
 ## Install
-`go get -u github.com/graph-gophers/dataloader`
+`go get -u github.com/graph-gophers/dataloader/v7
 
 ## Usage
 ```go
 // setup batch function - the first Context passed to the Loader's Load
 // function will be provided when the batch function is called.
-batchFn := func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-  var results []*dataloader.Result
+batchFn := func(ctx context.Context, keys []string) []*dataloader.Result[*model.User] {
+  var results []*dataloader.Result[(model.User]
   // do some async work to get data for specified keys
   // append to this list resolved values
+  // select * form user where id in (...) -- keys
+  // scan rows make it to results
   return results
 }
 
 // create Loader with an in-memory cache
-loader := dataloader.NewBatchedLoader(batchFn)
+var userLoader *dataloader.Loader[string, *model.User)
+userLoader := dataloader.NewBatchedLoader(batchFn)
+
+// create Loader with no cache
+userLoader := dataloader.NewBatchedLoader(batchFn, dataloader.WithNoCache[string, *model.User]())
 
 /**
  * Use loader
@@ -28,17 +34,17 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * closure over a value (in this case an interface value and error).
  * When called, it will block until the value is resolved.
  *
- * loader.Load() may be called multiple times for a given batch window.
+ * userLoader.Load() may be called multiple times for a given batch window.
  * The first context passed to Load is the object that will be passed
  * to the batch function.
  */
-thunk := loader.Load(context.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
-result, err := thunk()
+thunk := userLoader.Load(context.Background(), "key1")
+results, err := thunk()
 if err != nil {
   // handle data error
 }
 
-log.Printf("value: %#v", result)
+log.Printf("value: %#v", results)
 ```
 
 ### Don't need/want to use context?
