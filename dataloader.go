@@ -414,7 +414,9 @@ func (b *batcher) batch(originalContext context.Context) {
 	}
 
 	ctx, finish := b.tracer.TraceBatch(originalContext, keys)
-	defer finish(items)
+	defer func() {
+		finish(items)
+	}()
 
 	func() {
 		defer func() {
