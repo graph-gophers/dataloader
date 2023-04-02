@@ -11,9 +11,9 @@ import (
 	"testing"
 )
 
-///////////////////////////////////////////////////
+// /////////////////////////////////////////////////
 // Tests
-///////////////////////////////////////////////////
+// /////////////////////////////////////////////////
 func TestLoader(t *testing.T) {
 	t.Run("test Load method", func(t *testing.T) {
 		t.Parallel()
@@ -507,13 +507,13 @@ func TestLoader(t *testing.T) {
 func IDLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 		for _, key := range keys {
-			results = append(results, &Result[K]{key, nil})
+			results = append(results, &Result[K]{key.Raw(), nil})
 		}
 		return results
 	}, WithBatchCapacity[K, K](max))
@@ -522,13 +522,13 @@ func IDLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 func BatchOnlyLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 		for _, key := range keys {
-			results = append(results, &Result[K]{key, nil})
+			results = append(results, &Result[K]{key.Raw(), nil})
 		}
 		return results
 	}, WithBatchCapacity[K, K](max), WithClearCacheOnBatch[K, K]())
@@ -537,13 +537,13 @@ func BatchOnlyLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 func ErrorLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 		for _, key := range keys {
-			results = append(results, &Result[K]{key, fmt.Errorf("this is a test error")})
+			results = append(results, &Result[K]{key.Raw(), fmt.Errorf("this is a test error")})
 		}
 		return results
 	}, WithBatchCapacity[K, K](max))
@@ -552,17 +552,17 @@ func ErrorLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 func OneErrorLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		results := make([]*Result[K], max)
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 		for i := range keys {
 			var err error
 			if i == 0 {
 				err = errors.New("always error on the first key")
 			}
-			results[i] = &Result[K]{keys[i], err}
+			results[i] = &Result[K]{keys[i].Raw(), err}
 		}
 		return results
 	}, WithBatchCapacity[K, K](max))
@@ -570,7 +570,7 @@ func OneErrorLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 }
 func PanicLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
-	panicLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	panicLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		panic("Programming error")
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
 	return panicLoader, &loadCalls
@@ -578,7 +578,7 @@ func PanicLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 
 func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
-	panicCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	panicCacheLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		if len(keys) > 1 {
 			panic("Programming error")
 		}
@@ -586,7 +586,7 @@ func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 		returnResult := make([]*Result[K], len(keys))
 		for idx := range returnResult {
 			returnResult[idx] = &Result[K]{
-				keys[0],
+				keys[0].Raw(),
 				nil,
 			}
 		}
@@ -599,11 +599,11 @@ func PanicCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 
 func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var loadCalls [][]K
-	errorCacheLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	errorCacheLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		if len(keys) > 1 {
 			var results []*Result[K]
 			for _, key := range keys {
-				results = append(results, &Result[K]{key, fmt.Errorf("this is a test error")})
+				results = append(results, &Result[K]{key.Raw(), fmt.Errorf("this is a test error")})
 			}
 			return results
 		}
@@ -611,7 +611,7 @@ func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 		returnResult := make([]*Result[K], len(keys))
 		for idx := range returnResult {
 			returnResult[idx] = &Result[K]{
-				keys[0],
+				keys[0].Raw(),
 				nil,
 			}
 		}
@@ -625,12 +625,12 @@ func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 func BadLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
-		results = append(results, &Result[K]{keys[0], nil})
+		results = append(results, &Result[K]{keys[0].Raw(), nil})
 		return results
 	}, WithBatchCapacity[K, K](max))
 	return identityLoader, &loadCalls
@@ -640,13 +640,13 @@ func NoCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
 	cache := &NoCache[K, K]{}
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 		for _, key := range keys {
-			results = append(results, &Result[K]{key, nil})
+			results = append(results, &Result[K]{key.Raw(), nil})
 		}
 		return results
 	}, WithCache[K, K](cache), WithBatchCapacity[K, K](max))
@@ -658,10 +658,10 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
 	var loadCalls [][]K
 
-	loader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+	loader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
 		var results []*Result[K]
 		mu.Lock()
-		loadCalls = append(loadCalls, keys)
+		loadCalls = append(loadCalls, keys.Raw())
 		mu.Unlock()
 
 		lastKeyIndex := len(keys) - 1
@@ -670,7 +670,7 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 				break
 			}
 
-			results = append(results, &Result[K]{key, nil})
+			results = append(results, &Result[K]{key.Raw(), nil})
 		}
 		return results
 	})
@@ -678,15 +678,15 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 	return loader, &loadCalls
 }
 
-///////////////////////////////////////////////////
+// /////////////////////////////////////////////////
 // Benchmarks
-///////////////////////////////////////////////////
+// /////////////////////////////////////////////////
 var a = &Avg{}
 
-func batchIdentity[K comparable](_ context.Context, keys []K) (results []*Result[K]) {
+func batchIdentity[K comparable](_ context.Context, keys Keys[K]) (results []*Result[K]) {
 	a.Add(len(keys))
 	for _, key := range keys {
-		results = append(results, &Result[K]{key, nil})
+		results = append(results, &Result[K]{key.Raw(), nil})
 	}
 	return
 }

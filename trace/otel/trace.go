@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var _ dataloader.Tracer[string, string] = &Tracer[string, string]{}
+
 // Tracer implements a tracer that can be used with the Open Tracing standard.
 type Tracer[K comparable, V any] struct {
 	tr trace.Tracer
@@ -28,10 +30,10 @@ func (t *Tracer[K, V]) Tracer() trace.Tracer {
 }
 
 // TraceLoad will trace a call to dataloader.LoadMany with Open Tracing.
-func (t Tracer[K, V]) TraceLoad(ctx context.Context, key K) (context.Context, dataloader.TraceLoadFinishFunc[V]) {
+func (t Tracer[K, V]) TraceLoad(ctx context.Context, key dataloader.Key[K]) (context.Context, dataloader.TraceLoadFinishFunc[V]) {
 	spanCtx, span := t.Tracer().Start(ctx, "Dataloader: load")
 
-	span.SetAttributes(attribute.String("dataloader.key", fmt.Sprintf("%v", key)))
+	span.SetAttributes(attribute.String("dataloader.key", fmt.Sprintf("%v", key.Raw())))
 
 	return spanCtx, func(thunk dataloader.Thunk[V]) {
 		span.End()
@@ -39,10 +41,10 @@ func (t Tracer[K, V]) TraceLoad(ctx context.Context, key K) (context.Context, da
 }
 
 // TraceLoadMany will trace a call to dataloader.LoadMany with Open Tracing.
-func (t Tracer[K, V]) TraceLoadMany(ctx context.Context, keys []K) (context.Context, dataloader.TraceLoadManyFinishFunc[V]) {
+func (t Tracer[K, V]) TraceLoadMany(ctx context.Context, keys dataloader.Keys[K]) (context.Context, dataloader.TraceLoadManyFinishFunc[V]) {
 	spanCtx, span := t.Tracer().Start(ctx, "Dataloader: loadmany")
 
-	span.SetAttributes(attribute.String("dataloader.keys", fmt.Sprintf("%v", keys)))
+	span.SetAttributes(attribute.String("dataloader.keys", fmt.Sprintf("%v", keys.Raw())))
 
 	return spanCtx, func(thunk dataloader.ThunkMany[V]) {
 		span.End()
@@ -50,10 +52,10 @@ func (t Tracer[K, V]) TraceLoadMany(ctx context.Context, keys []K) (context.Cont
 }
 
 // TraceBatch will trace a call to dataloader.LoadMany with Open Tracing.
-func (t Tracer[K, V]) TraceBatch(ctx context.Context, keys []K) (context.Context, dataloader.TraceBatchFinishFunc[V]) {
+func (t Tracer[K, V]) TraceBatch(ctx context.Context, keys dataloader.Keys[K]) (context.Context, dataloader.TraceBatchFinishFunc[V]) {
 	spanCtx, span := t.Tracer().Start(ctx, "Dataloader: batch")
 
-	span.SetAttributes(attribute.String("dataloader.keys", fmt.Sprintf("%v", keys)))
+	span.SetAttributes(attribute.String("dataloader.keys", fmt.Sprintf("%v", keys.Raw())))
 
 	return spanCtx, func(results []*dataloader.Result[V]) {
 		span.End()
