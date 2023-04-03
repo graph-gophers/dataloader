@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 // /////////////////////////////////////////////////
@@ -501,6 +502,55 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("datacache", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, loadCalls := DataCacheLoader[string](0)
+		ctx := context.Background()
+		identityLoader.Prime(ctx, "A", "Cached")
+		identityLoader.Prime(ctx, "B", "B")
+
+		future1 := identityLoader.Load(ctx, "1")
+		future2 := identityLoader.Load(ctx, "A")
+		future3 := identityLoader.Load(ctx, "B")
+
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		// waiting first batch end, add data added to datacache
+		time.Sleep(time.Millisecond * 50)
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		future4 := identityLoader.Load(ctx, "C")
+		_, err = future4()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		calls := *loadCalls
+		inner := []string{"1", "A", "B"}
+		inner2 := []string{"C"}
+		expected := [][]string{inner, inner2}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
 }
 
 // test helpers
@@ -653,6 +703,38 @@ func NoCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	return identityLoader, &loadCalls
 }
 
+func DataCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
+	var mu sync.Mutex
+	var loadCalls [][]K
+	cache := &NoCache[K, K]{}
+
+	dcacheData := make(map[K]K, max)
+	var dcachemu sync.Mutex
+	datacache := &dcache[K, K]{set: func(ctx context.Context, k1, k2 K) {
+		dcachemu.Lock()
+		defer dcachemu.Unlock()
+		dcacheData[k1] = k2
+	}, get: func(ctx context.Context, k K) (K, bool) {
+		dcachemu.Lock()
+		defer dcachemu.Unlock()
+
+		data, ok := dcacheData[k]
+		return data, ok
+	}}
+
+	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
+		var results []*Result[K]
+		mu.Lock()
+		loadCalls = append(loadCalls, keys.Raw())
+		mu.Unlock()
+		for _, key := range keys {
+			results = append(results, &Result[K]{key.Raw(), nil})
+		}
+		return results
+	}, WithCache[K, K](cache), WithBatchCapacity[K, K](max), WithDataCache[K, K](datacache))
+	return identityLoader, &loadCalls
+}
+
 // FaultyLoader gives len(keys)-1 results.
 func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 	var mu sync.Mutex
@@ -676,6 +758,20 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 	})
 
 	return loader, &loadCalls
+}
+
+// DataCache
+type dcache[K comparable, V any] struct {
+	get func(context.Context, K) (V, bool)
+	set func(context.Context, K, V)
+}
+
+func (d *dcache[K, V]) Get(ctx context.Context, key K) (V, bool) {
+	return d.get(ctx, key)
+}
+
+func (d *dcache[K, V]) Set(ctx context.Context, key K, value V) {
+	d.set(ctx, key, value)
 }
 
 // /////////////////////////////////////////////////
