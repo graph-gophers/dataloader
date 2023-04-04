@@ -504,7 +504,21 @@ func TestLoader(t *testing.T) {
 
 	t.Run("datacache", func(t *testing.T) {
 		t.Parallel()
-		identityLoader, loadCalls := DataCacheLoader[string](0)
+		var mu sync.Mutex
+		var calls [][]string
+		identityLoader := DataCacheLoader[string, string](0, func(ctx context.Context, keys Keys[string]) []*Result[string] {
+			result := make([]*Result[string], 0, len(keys))
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, keys.Raw())
+
+			for _, key := range keys {
+				result = append(result, &Result[string]{Data: key.Raw()})
+			}
+
+			return result
+		})
+
 		ctx := context.Background()
 		identityLoader.Prime(ctx, "A", "Cached")
 		identityLoader.Prime(ctx, "B", "B")
@@ -542,7 +556,6 @@ func TestLoader(t *testing.T) {
 			t.Error(err.Error())
 		}
 
-		calls := *loadCalls
 		inner := []string{"1", "A", "B"}
 		inner2 := []string{"C"}
 		expected := [][]string{inner, inner2}
@@ -551,6 +564,73 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("struct datacache", func(t *testing.T) {
+		t.Parallel()
+		var mu sync.Mutex
+		var calls [][]int
+		identityLoader := DataCacheLoader[UserKey, string](0, func(ctx context.Context, keys Keys[UserKey]) []*Result[string] {
+			result := make([]*Result[string], 0, len(keys))
+			loadCalls := make([]int, 0, len(keys))
+			for _, key := range keys {
+				loadCalls = append(loadCalls, key.Raw().ID)
+
+				result = append(result, &Result[string]{Data: fmt.Sprintf("%v", key.Raw().ID)})
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, loadCalls)
+
+			return result
+		})
+		ctx := context.Background()
+		identityLoader.Prime(ctx, UserKey{ID: 1}, "Cached")
+		identityLoader.Prime(ctx, UserKey{ID: 2}, "B")
+
+		future1 := identityLoader.Load(ctx, UserKey{ID: 1})
+		future2 := identityLoader.Load(ctx, UserKey{ID: 2})
+		future3 := identityLoader.Load(ctx, UserKey{ID: 3})
+
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		// waiting first batch end, add data added to datacache
+		time.Sleep(time.Millisecond * 50)
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		future4 := identityLoader.Load(ctx, UserKey{ID: 4})
+		_, err = future4()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		inner := []int{1, 2, 3}
+		inner2 := []int{4}
+		expected := [][]int{inner, inner2}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+}
+
+type UserKey struct {
+	ID int
 }
 
 // test helpers
@@ -703,36 +783,25 @@ func NoCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 	return identityLoader, &loadCalls
 }
 
-func DataCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
-	var mu sync.Mutex
-	var loadCalls [][]K
-	cache := &NoCache[K, K]{}
+func DataCacheLoader[K comparable, V any](max int, fn BatchFunc[K, V]) *Loader[K, V] {
+	cache := &NoCache[K, V]{}
 
-	dcacheData := make(map[K]K, max)
+	dcacheData := make(map[K]V, max)
 	var dcachemu sync.Mutex
-	datacache := &dcache[K, K]{set: func(ctx context.Context, k1, k2 K) {
+	datacache := &dcache[K, V]{set: func(ctx context.Context, key K, value V) {
 		dcachemu.Lock()
 		defer dcachemu.Unlock()
-		dcacheData[k1] = k2
-	}, get: func(ctx context.Context, k K) (K, bool) {
+		dcacheData[key] = value
+	}, get: func(ctx context.Context, key K) (V, bool) {
 		dcachemu.Lock()
 		defer dcachemu.Unlock()
 
-		data, ok := dcacheData[k]
+		data, ok := dcacheData[key]
 		return data, ok
 	}}
 
-	identityLoader := NewBatchedLoader(func(_ context.Context, keys Keys[K]) []*Result[K] {
-		var results []*Result[K]
-		mu.Lock()
-		loadCalls = append(loadCalls, keys.Raw())
-		mu.Unlock()
-		for _, key := range keys {
-			results = append(results, &Result[K]{key.Raw(), nil})
-		}
-		return results
-	}, WithCache[K, K](cache), WithBatchCapacity[K, K](max), WithDataCache[K, K](datacache))
-	return identityLoader, &loadCalls
+	identityLoader := NewBatchedLoader(fn, WithCache[K, V](cache), WithBatchCapacity[K, V](max), WithDataCache[K, V](datacache))
+	return identityLoader
 }
 
 // FaultyLoader gives len(keys)-1 results.
