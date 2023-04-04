@@ -427,7 +427,7 @@ func (b *batcher[K, V]) end() {
 func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[K, V], keys Keys[K], cache DataCache[K, V]) []*Result[V] {
 	result := make([]*Result[V], len(keys))
 	reqKeys := make(Keys[K], 0, len(keys))
-	keyMap := make(map[int]int, len(keys))
+	keyPosition := make(map[int]int, len(keys))
 
 	for i := range keys {
 		val, ok := cache.Get(keys[i].Context(), keys[i].Raw())
@@ -436,12 +436,18 @@ func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[
 			continue
 		}
 		reqKeys = append(reqKeys, keys[i])
-		keyMap[len(reqKeys)-1] = i
+		keyPosition[len(reqKeys)-1] = i
 	}
 
 	items := batchfn(ctx, reqKeys)
 	for i := range items {
-		reali := keyMap[i]
+		reali, ok := keyPosition[i]
+		if !ok {
+			// if items more that we request, add item for end and show error after
+			result = append(result, items[i])
+			continue
+		}
+
 		result[reali] = items[i]
 
 		if items[i].Error == nil {
