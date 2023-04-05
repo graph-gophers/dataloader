@@ -4,12 +4,13 @@ import (
 	"context"
 )
 
+var _ Key[string] = &ckey[string]{}
+
+// Key interface for save real context if it needed
 type Key[K comparable] interface {
 	Raw() K
 	Context() context.Context
 }
-
-type Keys[K comparable] []Key[K]
 
 type ckey[K comparable] struct {
 	root K
@@ -24,24 +25,7 @@ func (c *ckey[K]) Context() context.Context {
 	return c.ctx
 }
 
+// ContextKey make comparable Key with save real context
 func ContextKey[K comparable](ctx context.Context, key K) Key[K] {
 	return &ckey[K]{root: key, ctx: ctx}
-}
-
-func ContextKeys[K comparable](ctx context.Context, keys []K) Keys[K] {
-	result := make(Keys[K], len(keys))
-	for i := range keys {
-		result[i] = ContextKey(ctx, keys[i])
-	}
-
-	return result
-}
-
-func (k Keys[K]) Raw() []K {
-	result := make([]K, len(k))
-	for i := range k {
-		result[i] = k[i].Raw()
-	}
-
-	return result
 }

@@ -32,7 +32,7 @@ type Interface[K comparable, V any] interface {
 // It's important that the length of the input keys matches the length of the output results.
 //
 // The keys passed to this function are guaranteed to be unique
-type BatchFunc[K comparable, V any] func(context.Context, Keys[K]) []*Result[V]
+type BatchFunc[K comparable, V any] func(context.Context, []K) []*Result[V]
 
 // Result is the data structure that a BatchFunc returns.
 // It contains the resolved data, and any errors that may have occurred while fetching the data.
@@ -211,7 +211,7 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 // The first context passed to this function within a given batch window will be provided to
 // the registered BatchFunc.
 func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
-	ctx, finish := l.tracer.TraceLoad(originalContext, ContextKey(originalContext, key))
+	ctx, finish := l.tracer.TraceLoad(originalContext, key)
 
 	c := make(chan *Result[V], 1)
 	var result struct {
@@ -291,7 +291,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 
 // LoadMany loads multiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
 func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) ThunkMany[V] {
-	ctx, finish := l.tracer.TraceLoadMany(originalContext, ContextKeys(originalContext, keys))
+	ctx, finish := l.tracer.TraceLoadMany(originalContext, keys)
 
 	var (
 		length = len(keys)
@@ -424,13 +424,13 @@ func (b *batcher[K, V]) end() {
 	}
 }
 
-func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[K, V], keys Keys[K], cache DataCache[K, V]) []*Result[V] {
+func batchWithCache[K comparable, V any](originalContext context.Context, batchfn BatchFunc[K, V], keys []K, cache DataCache[K, V]) []*Result[V] {
 	result := make([]*Result[V], len(keys))
-	reqKeys := make(Keys[K], 0, len(keys))
+	reqKeys := make([]K, 0, len(keys))
 	keyPosition := make(map[int]int, len(keys))
 
 	for i := range keys {
-		val, ok := cache.Get(keys[i].Context(), keys[i].Raw())
+		val, ok := cache.Get(originalContext, keys[i])
 		if ok {
 			result[i] = &Result[V]{Data: val}
 			continue
@@ -439,7 +439,7 @@ func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[
 		keyPosition[len(reqKeys)-1] = i
 	}
 
-	items := batchfn(ctx, reqKeys)
+	items := batchfn(originalContext, reqKeys)
 	for i := range items {
 		reali, ok := keyPosition[i]
 		if !ok {
@@ -451,7 +451,7 @@ func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[
 		result[reali] = items[i]
 
 		if items[i].Error == nil {
-			cache.Set(keys[reali].Context(), keys[reali].Raw(), items[i].Data)
+			cache.Set(originalContext, keys[reali], items[i].Data)
 		}
 	}
 
@@ -461,14 +461,14 @@ func batchWithCache[K comparable, V any](ctx context.Context, batchfn BatchFunc[
 // execute the batch of all items in queue
 func (b *batcher[K, V]) batch(originalContext context.Context) {
 	var (
-		keys     = make(Keys[K], 0)
+		keys     = make([]K, 0)
 		reqs     = make([]*batchRequest[K, V], 0)
 		items    = make([]*Result[V], 0)
 		panicErr interface{}
 	)
 
 	for item := range b.input {
-		keys = append(keys, ContextKey(item.ctx, item.key))
+		keys = append(keys, item.key)
 		reqs = append(reqs, item)
 	}
 

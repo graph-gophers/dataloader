@@ -19,11 +19,11 @@ func ExampleNoCache() {
 		5: {ID: 5, FirstName: "John", LastName: "Smith", Email: "john@example.com"},
 	}
 
-	batchFunc := func(_ context.Context, keys dataloader.Keys[int]) []*dataloader.Result[*User] {
+	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {
 		var results []*dataloader.Result[*User]
 		// do some pretend work to resolve keys
 		for _, k := range keys {
-			results = append(results, &dataloader.Result[*User]{Data: m[k.Raw()]})
+			results = append(results, &dataloader.Result[*User]{Data: m[k]})
 		}
 		return results
 	}
