@@ -29,3 +29,13 @@ func (c *ckey[K]) Context() context.Context {
 func ContextKey[K comparable](ctx context.Context, key K) Key[K] {
 	return &ckey[K]{root: key, ctx: ctx}
 }
+
+type Keys[K comparable] []Key[K]
+
+func (k Keys[K]) Raw() []K {
+	res := make([]K, len(k))
+	for i := range k {
+		res[i] = k[i].Raw()
+	}
+	return res
+}

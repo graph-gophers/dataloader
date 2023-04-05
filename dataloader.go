@@ -424,6 +424,7 @@ func (b *batcher[K, V]) end() {
 	}
 }
 
+// batchWithCache wrap user batchFunc for cache real data
 func batchWithCache[K comparable, V any](originalContext context.Context, batchfn BatchFunc[K, V], keys []K, cache DataCache[K, V]) []*Result[V] {
 	result := make([]*Result[V], len(keys))
 	reqKeys := make([]K, 0, len(keys))

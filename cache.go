@@ -27,6 +27,7 @@ func (c *NoCache[K, V]) Delete(context.Context, K) bool { return false }
 // Clear is a NOOP
 func (c *NoCache[K, V]) Clear() { return }
 
+// DataCache interface for cache data on batchFunc level
 type DataCache[K comparable, V any] interface {
 	Get(context.Context, K) (V, bool)
 	Set(context.Context, K, V)
