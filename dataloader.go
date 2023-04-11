@@ -101,6 +101,9 @@ type Loader[K comparable, V any] struct {
 
 	// can be set to trace calls to dataloader
 	tracer Tracer[K, V]
+
+	// timeout for batchFunc
+	timeout time.Duration
 }
 
 // Thunk is a function that will block until the value (*Result) it contains is resolved.
@@ -182,6 +185,15 @@ func WithTracer[K comparable, V any](tracer Tracer[K, V]) Option[K, V] {
 	}
 }
 
+// WithTimeout set timeout for batchFunc
+func WithTimeout[K comparable, V any](t time.Duration) Option[K, V] {
+	return func(l *Loader[K, V]) {
+		if t > 0 {
+			l.timeout = t
+		}
+	}
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Option[K, V]) *Loader[K, V] {
 	loader := &Loader[K, V]{
@@ -259,7 +271,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
-		l.curBatcher = l.newBatcher(l.silent, l.tracer, l.dataCache)
+		l.curBatcher = l.newBatcher(l.silent, l.tracer, l.dataCache, l.timeout)
 		// start the current batcher batch function
 		go l.curBatcher.batch(originalContext)
 		// start a sleeper for the current batcher
@@ -402,17 +414,19 @@ type batcher[K comparable, V any] struct {
 	silent   bool
 	tracer   Tracer[K, V]
 	cache    DataCache[K, V]
+	timeout  time.Duration
 }
 
 // newBatcher returns a batcher for the current requests
 // all the batcher methods must be protected by a global batchLock
-func (l *Loader[K, V]) newBatcher(silent bool, tracer Tracer[K, V], cache DataCache[K, V]) *batcher[K, V] {
+func (l *Loader[K, V]) newBatcher(silent bool, tracer Tracer[K, V], cache DataCache[K, V], timeout time.Duration) *batcher[K, V] {
 	return &batcher[K, V]{
 		input:   make(chan *batchRequest[K, V], l.inputCap),
 		batchFn: l.batchFn,
 		silent:  silent,
 		tracer:  tracer,
 		cache:   cache,
+		timeout: timeout,
 	}
 }
 
@@ -475,6 +489,14 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	ctx, finish := b.tracer.TraceBatch(originalContext, keys)
 	defer finish(items)
+
+	// if used WithTimeout, detache original context and add new timeout for batch function
+	if b.timeout > 0 {
+		ctx = &detachedContext{Context: context.Background(), orig: ctx}
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, b.timeout)
+		defer cancel()
+	}
 
 	func() {
 		defer func() {
