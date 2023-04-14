@@ -902,6 +902,17 @@ func DataCacheLoader[K comparable, V any](max int, fn BatchFunc[K, V]) *Loader[K
 
 		data, ok := dcacheData[key]
 		return data, ok
+	}, del: func(ctx context.Context, k K) bool {
+		dcachemu.Lock()
+		defer dcachemu.Unlock()
+
+		delete(dcacheData, k)
+		return true
+	}, clear: func() {
+		dcachemu.Lock()
+		defer dcachemu.Unlock()
+
+		dcacheData = make(map[K]V)
 	}}
 
 	identityLoader := NewBatchedLoader(fn, WithCache[K, V](cache), WithBatchCapacity[K, V](max), WithDataCache[K, V](datacache))
@@ -961,8 +972,10 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 
 // DataCache
 type dcache[K comparable, V any] struct {
-	get func(context.Context, K) (V, bool)
-	set func(context.Context, K, V)
+	get   func(context.Context, K) (V, bool)
+	set   func(context.Context, K, V)
+	del   func(context.Context, K) bool
+	clear func()
 }
 
 func (d *dcache[K, V]) Get(ctx context.Context, key K) (V, bool) {
@@ -971,6 +984,14 @@ func (d *dcache[K, V]) Get(ctx context.Context, key K) (V, bool) {
 
 func (d *dcache[K, V]) Set(ctx context.Context, key K, value V) {
 	d.set(ctx, key, value)
+}
+
+func (d *dcache[K, V]) Delete(ctx context.Context, key K) bool {
+	return d.del(ctx, key)
+}
+
+func (d *dcache[K, V]) Clear() {
+	d.clear()
 }
 
 // /////////////////////////////////////////////////

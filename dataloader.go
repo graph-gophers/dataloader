@@ -373,6 +373,9 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
+	if l.dataCache != nil {
+		l.dataCache.Delete(ctx, key)
+	}
 	l.cacheLock.Unlock()
 	return l
 }
@@ -382,6 +385,9 @@ func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 func (l *Loader[K, V]) ClearAll() Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Clear()
+	if l.dataCache != nil {
+		l.dataCache.Clear()
+	}
 	l.cacheLock.Unlock()
 	return l
 }
@@ -404,6 +410,9 @@ func (l *Loader[K, V]) reset() {
 
 	if l.clearCacheOnBatch {
 		l.cache.Clear()
+		if l.dataCache != nil {
+			l.dataCache.Clear()
+		}
 	}
 }
 
@@ -464,10 +473,7 @@ func batchWithCache[K comparable, V any](originalContext context.Context, batchf
 		}
 
 		result[reali] = items[i]
-
-		if items[i].Error == nil {
-			cache.Set(originalContext, keys[reali], items[i].Data)
-		}
+		cache.Set(originalContext, keys[reali], items[i].Data)
 	}
 
 	return result

@@ -31,4 +31,6 @@ func (c *NoCache[K, V]) Clear() { return }
 type DataCache[K comparable, V any] interface {
 	Get(context.Context, K) (V, bool)
 	Set(context.Context, K, V)
+	Delete(context.Context, K) bool
+	Clear()
 }
