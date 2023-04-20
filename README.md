@@ -52,3 +52,7 @@ This implementation contains a very basic cache that is intended only to be used
 
 ## Examples
 There are a few basic examples in the example folder.
+
+## See also
+- [TRACE](TRACE.md)
+- [MIGRATE](MIGRATE.md)
