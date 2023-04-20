@@ -102,3 +102,9 @@ import "github.com/graph-gophers/dataloader/v6"
 
 [Generics](https://go.dev/doc/tutorial/generics) support has been added.
 With this update, you can now write more type-safe code.
+
+Use the major version tag in the import path.
+
+```go
+import "github.com/graph-gophers/dataloader/v7"
+```
