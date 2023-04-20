@@ -12,68 +12,72 @@ import (
 	"context"
 	"strings"
 
-    exp "go.opencensus.io/examples/exporter"
-    "github.com/nicksrandall/dataloader"
+	"github.com/graph-gophers/dataloader/v7"
+	exp "go.opencensus.io/examples/exporter"
 	"go.opencensus.io/trace"
 )
+
+type User struct {
+	ID string
+}
 
 // OpenCensusTracer Tracer implements a tracer that can be used with the Open Tracing standard.
 type OpenCensusTracer struct{}
 
 // TraceLoad will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenCensusTracer) TraceLoad(ctx context.Context, key dataloader.Key) (context.Context, dataloader.TraceLoadFinishFunc) {
+func (OpenCensusTracer) TraceLoad(ctx context.Context, key string) (context.Context, dataloader.TraceLoadFinishFunc[*User]) {
 	cCtx, cSpan := trace.StartSpan(ctx, "Dataloader: load")
 	cSpan.AddAttributes(
-		trace.StringAttribute("dataloader.key", key.String()),
+		trace.StringAttribute("dataloader.key", key),
 	)
-	return cCtx, func(thunk dataloader.Thunk) {
+	return cCtx, func(thunk dataloader.Thunk[*User]) {
 		// TODO: is there anything we should do with the results?
 		cSpan.End()
 	}
 }
 
 // TraceLoadMany will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenCensusTracer) TraceLoadMany(ctx context.Context, keys dataloader.Keys) (context.Context, dataloader.TraceLoadManyFinishFunc) {
+func (OpenCensusTracer) TraceLoadMany(ctx context.Context, keys []string) (context.Context, dataloader.TraceLoadManyFinishFunc[*User]) {
 	cCtx, cSpan := trace.StartSpan(ctx, "Dataloader: loadmany")
 	cSpan.AddAttributes(
-		trace.StringAttribute("dataloader.keys", strings.Join(keys.Keys(), ",")),
+		trace.StringAttribute("dataloader.keys", strings.Join(keys, ",")),
 	)
-	return cCtx, func(thunk dataloader.ThunkMany) {
+	return cCtx, func(thunk dataloader.ThunkMany[*User]) {
 		// TODO: is there anything we should do with the results?
 		cSpan.End()
 	}
 }
 
 // TraceBatch will trace a call to dataloader.LoadMany with Open Tracing
-func (OpenCensusTracer) TraceBatch(ctx context.Context, keys dataloader.Keys) (context.Context, dataloader.TraceBatchFinishFunc) {
+func (OpenCensusTracer) TraceBatch(ctx context.Context, keys []string) (context.Context, dataloader.TraceBatchFinishFunc[*User]) {
 	cCtx, cSpan := trace.StartSpan(ctx, "Dataloader: batch")
 	cSpan.AddAttributes(
-		trace.StringAttribute("dataloader.keys", strings.Join(keys.Keys(), ",")),
+		trace.StringAttribute("dataloader.keys", strings.Join(keys, ",")),
 	)
-	return cCtx, func(results []*dataloader.Result) {
+	return cCtx, func(results []*dataloader.Result[*User]) {
 		// TODO: is there anything we should do with the results?
 		cSpan.End()
 	}
 }
 
-func batchFunc(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-    // ...loader logic goes here
+func batchFunc(ctx context.Context, keys []string) []*dataloader.Result[*User] {
+	// ...loader logic goes here
 }
 
-func main(){
-    //initialize an example exporter that just logs to the console
-    trace.ApplyConfig(trace.Config{
+func main() {
+	//initialize an example exporter that just logs to the console
+	trace.ApplyConfig(trace.Config{
 		DefaultSampler: trace.AlwaysSample(),
 	})
-    trace.RegisterExporter(&exp.PrintExporter{})
-    // initialize the dataloader with your new tracer backend
-    loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithTracer(OpenCensusTracer{}))
-    // initialize a context since it's not receiving one from anywhere else.
-    ctx, span := trace.StartSpan(context.TODO(), "Span Name")
-    defer span.End()
-    // request from the dataloader as usual
-    value, err := loader.Load(ctx, dataloader.StringKey(SomeID))()
-    // ...
+	trace.RegisterExporter(&exp.PrintExporter{})
+	// initialize the dataloader with your new tracer backend
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithTracer[string, *User](OpenCensusTracer{}))
+	// initialize a context since it's not receiving one from anywhere else.
+	ctx, span := trace.StartSpan(context.TODO(), "Span Name")
+	defer span.End()
+	// request from the dataloader as usual
+	value, err := loader.Load(ctx, SomeID)()
+	// ...
 }
 ```
 
