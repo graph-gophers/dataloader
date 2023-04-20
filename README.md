@@ -5,14 +5,15 @@
 This is an implementation of [Facebook's DataLoader](https://github.com/facebook/dataloader) in Golang.
 
 ## Install
-`go get -u github.com/graph-gophers/dataloader`
+`go get -u github.com/graph-gophers/dataloader/v7`
 
 ## Usage
 ```go
 // setup batch function - the first Context passed to the Loader's Load
 // function will be provided when the batch function is called.
-batchFn := func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-  var results []*dataloader.Result
+// this function is registered with the Loader, and the key and value are fixed using generics.
+batchFn := func(ctx context.Context, keys []int) []*dataloader.Result[*User] {
+  var results []*dataloader.Result[*User]
   // do some async work to get data for specified keys
   // append to this list resolved values
   return results
@@ -32,7 +33,7 @@ loader := dataloader.NewBatchedLoader(batchFn)
  * The first context passed to Load is the object that will be passed
  * to the batch function.
  */
-thunk := loader.Load(context.TODO(), dataloader.StringKey("key1")) // StringKey is a convenience method that make wraps string to implement `Key` interface
+thunk := loader.Load(context.TODO(), 5)
 result, err := thunk()
 if err != nil {
   // handle data error
