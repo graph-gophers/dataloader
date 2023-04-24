@@ -651,6 +651,46 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("batches many requests with datacache and double keys", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, loadCalls := IDLoaderDataCache[string](0)
+		ctx := context.Background()
+		future1 := identityLoader.Load(ctx, "1")
+		future2 := identityLoader.Load(ctx, "2")
+		future3 := identityLoader.Load(ctx, "1")
+
+		val1, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		if val1 != "1" {
+			t.Errorf("future1 expected %#v, got %#v", "1", val1)
+		}
+
+		val2, err := future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		if val2 != "2" {
+			t.Errorf("future2 expected %#v, got %#v", "2", val2)
+		}
+
+		val3, err := future3()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		if val1 != "1" {
+			t.Errorf("future3 expected %#v, got %#v", "1", val3)
+		}
+
+		calls := *loadCalls
+		inner := []string{"1", "2"} // batch double keys
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not call batchFn in right order. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
 	t.Run("struct datacache", func(t *testing.T) {
 		t.Parallel()
 		var mu sync.Mutex
@@ -884,6 +924,23 @@ func NoCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 		}
 		return results
 	}, WithCache[K, K](cache), WithBatchCapacity[K, K](max))
+	return identityLoader, &loadCalls
+}
+
+// test helpers
+func IDLoaderDataCache[K comparable](max int) (*Loader[K, K], *[][]K) {
+	var mu sync.Mutex
+	var loadCalls [][]K
+	identityLoader := DataCacheLoader(max, func(_ context.Context, keys []K) []*Result[K] {
+		var results []*Result[K]
+		mu.Lock()
+		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
+		for _, key := range keys {
+			results = append(results, &Result[K]{key, nil})
+		}
+		return results
+	})
 	return identityLoader, &loadCalls
 }
 

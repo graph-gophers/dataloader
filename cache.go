@@ -34,3 +34,14 @@ type DataCache[K comparable, V any] interface {
 	Delete(context.Context, K) bool
 	Clear()
 }
+
+type DataCacheMany[K comparable, V any] interface {
+	GetMany(context.Context, []K) (map[K]V, error)
+}
+
+type nocache[K comparable, V any] struct{}
+
+func (nocache[K, V]) Get(context.Context, K) (V, bool) { var v V; return v, false }
+func (nocache[K, V]) Set(context.Context, K, V)        {}
+func (nocache[K, V]) Delete(context.Context, K) bool   { return false }
+func (nocache[K, V]) Clear()                           {}

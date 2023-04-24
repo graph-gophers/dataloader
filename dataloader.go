@@ -212,6 +212,10 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 		loader.cache = NewCache[K, V]()
 	}
 
+	if loader.dataCache == nil {
+		loader.dataCache = &nocache[K, V]{}
+	}
+
 	if loader.tracer == nil {
 		loader.tracer = NoopTracer[K, V]{}
 	}
@@ -373,9 +377,7 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
-	if l.dataCache != nil {
-		l.dataCache.Delete(ctx, key)
-	}
+	l.dataCache.Delete(ctx, key)
 	l.cacheLock.Unlock()
 	return l
 }
@@ -385,9 +387,7 @@ func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 func (l *Loader[K, V]) ClearAll() Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Clear()
-	if l.dataCache != nil {
-		l.dataCache.Clear()
-	}
+	l.dataCache.Clear()
 	l.cacheLock.Unlock()
 	return l
 }
@@ -410,9 +410,7 @@ func (l *Loader[K, V]) reset() {
 
 	if l.clearCacheOnBatch {
 		l.cache.Clear()
-		if l.dataCache != nil {
-			l.dataCache.Clear()
-		}
+		l.dataCache.Clear()
 	}
 }
 
@@ -448,32 +446,67 @@ func (b *batcher[K, V]) end() {
 }
 
 // batchWithCache wrap user batchFunc for cache real data
-func batchWithCache[K comparable, V any](originalContext context.Context, batchfn BatchFunc[K, V], keys []K, cache DataCache[K, V]) []*Result[V] {
-	result := make([]*Result[V], len(keys))
-	reqKeys := make([]K, 0, len(keys))
-	keyPosition := make(map[int]int, len(keys))
+func batchWithCache[K comparable, V any](originalContext context.Context, timeout time.Duration, batchfn BatchFunc[K, V], keys []K, cache DataCache[K, V]) []*Result[V] {
+	resultMap := make(map[K]*Result[V], len(keys))
+	uniqK := make(map[K]struct{}, len(keys))
+	reqK := make([]K, 0, len(keys))
 
-	for i := range keys {
-		val, ok := cache.Get(originalContext, keys[i])
-		if ok {
-			result[i] = &Result[V]{Data: val}
-			continue
+	ctx, cancel := context.WithTimeout(DetachedContext(originalContext), timeout)
+	defer cancel()
+
+	cacheMany, cacheManyOk := cache.(DataCacheMany[K, V])
+	if cacheManyOk {
+		items, err := cacheMany.GetMany(ctx, keys)
+		if err != nil {
+			log.Printf("Dataloader: Error in datacache.GetMany function: %s", err.Error())
+		} else {
+			for k, v := range items {
+				resultMap[k] = &Result[V]{Data: v}
+				uniqK[k] = struct{}{}
+			}
+
+			for _, k := range keys {
+				if _, ok := uniqK[k]; !ok {
+					reqK = append(reqK, k)
+				}
+			}
 		}
-		reqKeys = append(reqKeys, keys[i])
-		keyPosition[len(reqKeys)-1] = i
+	} else {
+		var cacheOk, keyOk bool
+		var cacheRes V
+		for _, k := range keys {
+			_, keyOk = uniqK[k]
+			if keyOk {
+				continue
+			}
+
+			cacheRes, cacheOk = cache.Get(originalContext, k)
+			if cacheOk {
+				resultMap[k] = &Result[V]{Data: cacheRes}
+				uniqK[k] = struct{}{}
+				continue
+			}
+
+			reqK = append(reqK, k)
+			uniqK[k] = struct{}{}
+		}
 	}
 
-	items := batchfn(originalContext, reqKeys)
-	for i := range items {
-		reali, ok := keyPosition[i]
-		if !ok {
-			// if items more that we request, add item for end and show error after
-			result = append(result, items[i])
-			continue
-		}
+	items := batchfn(ctx, reqK)
+	for i, item := range items {
+		k := reqK[i]
+		resultMap[k] = item
 
-		result[reali] = items[i]
-		cache.Set(originalContext, keys[reali], items[i].Data)
+		if item.Error == nil {
+			cache.Set(originalContext, k, item.Data)
+		}
+	}
+
+	result := make([]*Result[V], 0, len(keys))
+	for _, k := range keys {
+		if val, ok := resultMap[k]; ok {
+			result = append(result, val)
+		}
 	}
 
 	return result
@@ -517,8 +550,9 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 				log.Printf("Dataloader: Panic received in batch function: %v\n%s", panicErr, buf)
 			}
 		}()
+		// no panic if dataloader create without b.cache
 		if b.cache != nil {
-			items = batchWithCache(ctx, b.batchFn, keys, b.cache)
+			items = batchWithCache(ctx, b.timeout, b.batchFn, keys, b.cache)
 		} else {
 			items = b.batchFn(ctx, keys)
 		}
