@@ -451,27 +451,46 @@ func batchWithCache[K comparable, V any](originalContext context.Context, timeou
 	uniqK := make(map[K]struct{}, len(keys))
 	reqK := make([]K, 0, len(keys))
 
-	var cacheOk, keyOk bool
-	var cacheRes V
-	for _, k := range keys {
-		_, keyOk = uniqK[k]
-		if keyOk {
-			continue
-		}
-
-		cacheRes, cacheOk = cache.Get(originalContext, k)
-		if cacheOk {
-			resultMap[k] = &Result[V]{Data: cacheRes}
-			uniqK[k] = struct{}{}
-			continue
-		}
-
-		reqK = append(reqK, k)
-		uniqK[k] = struct{}{}
-	}
-
 	ctx, cancel := context.WithTimeout(DetachedContext(originalContext), timeout)
 	defer cancel()
+
+	cacheMany, cacheManyOk := cache.(DataCacheMany[K, V])
+	if cacheManyOk {
+		items, err := cacheMany.GetMany(ctx, keys)
+		if err != nil {
+			log.Printf("Dataloader: Error in datacache.GetMany function: %s", err.Error())
+		} else {
+			for k, v := range items {
+				resultMap[k] = &Result[V]{Data: v}
+				uniqK[k] = struct{}{}
+			}
+
+			for _, k := range keys {
+				if _, ok := uniqK[k]; !ok {
+					reqK = append(reqK, k)
+				}
+			}
+		}
+	} else {
+		var cacheOk, keyOk bool
+		var cacheRes V
+		for _, k := range keys {
+			_, keyOk = uniqK[k]
+			if keyOk {
+				continue
+			}
+
+			cacheRes, cacheOk = cache.Get(originalContext, k)
+			if cacheOk {
+				resultMap[k] = &Result[V]{Data: cacheRes}
+				uniqK[k] = struct{}{}
+				continue
+			}
+
+			reqK = append(reqK, k)
+			uniqK[k] = struct{}{}
+		}
+	}
 
 	items := batchfn(ctx, reqK)
 	for i, item := range items {

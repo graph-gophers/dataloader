@@ -35,6 +35,10 @@ type DataCache[K comparable, V any] interface {
 	Clear()
 }
 
+type DataCacheMany[K comparable, V any] interface {
+	GetMany(context.Context, []K) (map[K]V, error)
+}
+
 type nocache[K comparable, V any] struct{}
 
 func (nocache[K, V]) Get(context.Context, K) (V, bool) { var v V; return v, false }
