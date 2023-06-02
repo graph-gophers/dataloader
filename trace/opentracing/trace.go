@@ -9,6 +9,8 @@ import (
 	"github.com/opentracing/opentracing-go"
 )
 
+var _ dataloader.Tracer[string, string] = &Tracer[string, string]{}
+
 // Tracer implements a tracer that can be used with the Open Tracing standard.
 type Tracer[K comparable, V any] struct{}
 

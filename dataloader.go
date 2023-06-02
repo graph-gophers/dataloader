@@ -72,6 +72,8 @@ type Loader[K comparable, V any] struct {
 	// implementation could be used as long as it implements the `Cache` interface.
 	cacheLock sync.Mutex
 	cache     Cache[K, V]
+
+	dataCache DataCache[K, V]
 	// should we clear the cache on each batch?
 	// this would allow batching but no long term caching
 	clearCacheOnBatch bool
@@ -99,6 +101,9 @@ type Loader[K comparable, V any] struct {
 
 	// can be set to trace calls to dataloader
 	tracer Tracer[K, V]
+
+	// timeout for batchFunc
+	timeout time.Duration
 }
 
 // Thunk is a function that will block until the value (*Result) it contains is resolved.
@@ -112,6 +117,7 @@ type ThunkMany[V any] func() ([]V, []error)
 
 // type used to on input channel
 type batchRequest[K comparable, V any] struct {
+	ctx     context.Context
 	key     K
 	channel chan *Result[V]
 }
@@ -123,6 +129,13 @@ type Option[K comparable, V any] func(*Loader[K, V])
 func WithCache[K comparable, V any](c Cache[K, V]) Option[K, V] {
 	return func(l *Loader[K, V]) {
 		l.cache = c
+	}
+}
+
+// WithDataCache sets the BatchLoader cache for data (not thunk)
+func WithDataCache[K comparable, V any](c DataCache[K, V]) Option[K, V] {
+	return func(l *Loader[K, V]) {
+		l.dataCache = c
 	}
 }
 
@@ -172,6 +185,15 @@ func WithTracer[K comparable, V any](tracer Tracer[K, V]) Option[K, V] {
 	}
 }
 
+// WithTimeout set timeout for batchFunc
+func WithTimeout[K comparable, V any](t time.Duration) Option[K, V] {
+	return func(l *Loader[K, V]) {
+		if t > 0 {
+			l.timeout = t
+		}
+	}
+}
+
 // NewBatchedLoader constructs a new Loader with given options.
 func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Option[K, V]) *Loader[K, V] {
 	loader := &Loader[K, V]{
@@ -188,6 +210,10 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 	// Set defaults
 	if loader.cache == nil {
 		loader.cache = NewCache[K, V]()
+	}
+
+	if loader.dataCache == nil {
+		loader.dataCache = &nocache[K, V]{}
 	}
 
 	if loader.tracer == nil {
@@ -244,12 +270,12 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 
 	// this is sent to batch fn. It contains the key and the channel to return
 	// the result on
-	req := &batchRequest[K, V]{key, c}
+	req := &batchRequest[K, V]{ctx, key, c}
 
 	l.batchLock.Lock()
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
-		l.curBatcher = l.newBatcher(l.silent, l.tracer)
+		l.curBatcher = l.newBatcher(l.silent, l.tracer, l.dataCache, l.timeout)
 		// start the current batcher batch function
 		go l.curBatcher.batch(originalContext)
 		// start a sleeper for the current batcher
@@ -351,6 +377,7 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Delete(ctx, key)
+	l.dataCache.Delete(ctx, key)
 	l.cacheLock.Unlock()
 	return l
 }
@@ -360,6 +387,7 @@ func (l *Loader[K, V]) Clear(ctx context.Context, key K) Interface[K, V] {
 func (l *Loader[K, V]) ClearAll() Interface[K, V] {
 	l.cacheLock.Lock()
 	l.cache.Clear()
+	l.dataCache.Clear()
 	l.cacheLock.Unlock()
 	return l
 }
@@ -382,6 +410,7 @@ func (l *Loader[K, V]) reset() {
 
 	if l.clearCacheOnBatch {
 		l.cache.Clear()
+		l.dataCache.Clear()
 	}
 }
 
@@ -391,16 +420,20 @@ type batcher[K comparable, V any] struct {
 	finished bool
 	silent   bool
 	tracer   Tracer[K, V]
+	cache    DataCache[K, V]
+	timeout  time.Duration
 }
 
 // newBatcher returns a batcher for the current requests
 // all the batcher methods must be protected by a global batchLock
-func (l *Loader[K, V]) newBatcher(silent bool, tracer Tracer[K, V]) *batcher[K, V] {
+func (l *Loader[K, V]) newBatcher(silent bool, tracer Tracer[K, V], cache DataCache[K, V], timeout time.Duration) *batcher[K, V] {
 	return &batcher[K, V]{
 		input:   make(chan *batchRequest[K, V], l.inputCap),
 		batchFn: l.batchFn,
 		silent:  silent,
 		tracer:  tracer,
+		cache:   cache,
+		timeout: timeout,
 	}
 }
 
@@ -410,6 +443,75 @@ func (b *batcher[K, V]) end() {
 		close(b.input)
 		b.finished = true
 	}
+}
+
+// batchWithCache wrap user batchFunc for cache real data
+func batchWithCache[K comparable, V any](originalContext context.Context, timeout time.Duration, batchfn BatchFunc[K, V], keys []K, cache DataCache[K, V]) []*Result[V] {
+	resultMap := make(map[K]*Result[V], len(keys))
+	uniqK := make(map[K]struct{}, len(keys))
+	reqK := make([]K, 0, len(keys))
+
+	ctx, cancel := context.WithTimeout(DetachedContext(originalContext), timeout)
+	defer cancel()
+
+	cacheMany, cacheManyOk := cache.(DataCacheMany[K, V])
+	if cacheManyOk {
+		items, err := cacheMany.GetMany(ctx, keys)
+		if err != nil {
+			log.Printf("Dataloader: Error in datacache.GetMany function: %s", err.Error())
+		} else {
+			for k, v := range items {
+				resultMap[k] = &Result[V]{Data: v}
+				uniqK[k] = struct{}{}
+			}
+
+			for _, k := range keys {
+				if _, ok := uniqK[k]; !ok {
+					reqK = append(reqK, k)
+				}
+			}
+		}
+	} else {
+		var cacheOk, keyOk bool
+		var cacheRes V
+		for _, k := range keys {
+			_, keyOk = uniqK[k]
+			if keyOk {
+				continue
+			}
+
+			cacheRes, cacheOk = cache.Get(originalContext, k)
+			if cacheOk {
+				resultMap[k] = &Result[V]{Data: cacheRes}
+				uniqK[k] = struct{}{}
+				continue
+			}
+
+			reqK = append(reqK, k)
+			uniqK[k] = struct{}{}
+		}
+	}
+
+	if len(reqK) > 0 {
+		items := batchfn(ctx, reqK)
+		for i, item := range items {
+			k := reqK[i]
+			resultMap[k] = item
+
+			if item.Error == nil {
+				cache.Set(originalContext, k, item.Data)
+			}
+		}
+	}
+
+	result := make([]*Result[V], 0, len(keys))
+	for _, k := range keys {
+		if val, ok := resultMap[k]; ok {
+			result = append(result, val)
+		}
+	}
+
+	return result
 }
 
 // execute the batch of all items in queue
@@ -429,6 +531,14 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 	ctx, finish := b.tracer.TraceBatch(originalContext, keys)
 	defer finish(items)
 
+	// if used WithTimeout, detache original context and add new timeout for batch function
+	if b.timeout > 0 {
+		ctx = &detachedContext{Context: context.Background(), orig: ctx}
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, b.timeout)
+		defer cancel()
+	}
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -442,7 +552,12 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 				log.Printf("Dataloader: Panic received in batch function: %v\n%s", panicErr, buf)
 			}
 		}()
-		items = b.batchFn(ctx, keys)
+		// no panic if dataloader create without b.cache
+		if b.cache != nil {
+			items = batchWithCache(ctx, b.timeout, b.batchFn, keys, b.cache)
+		} else {
+			items = b.batchFn(ctx, keys)
+		}
 	}()
 
 	if panicErr != nil {
