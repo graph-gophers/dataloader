@@ -492,13 +492,15 @@ func batchWithCache[K comparable, V any](originalContext context.Context, timeou
 		}
 	}
 
-	items := batchfn(ctx, reqK)
-	for i, item := range items {
-		k := reqK[i]
-		resultMap[k] = item
+	if len(reqK) > 0 {
+		items := batchfn(ctx, reqK)
+		for i, item := range items {
+			k := reqK[i]
+			resultMap[k] = item
 
-		if item.Error == nil {
-			cache.Set(originalContext, k, item.Data)
+			if item.Error == nil {
+				cache.Set(originalContext, k, item.Data)
+			}
 		}
 	}
 
