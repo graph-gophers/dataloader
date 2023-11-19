@@ -481,12 +481,14 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 // wait the appropriate amount of time for the provided batcher
 func (l *Loader[K, V]) sleeper(b *batcher[K, V], close chan bool) {
+	timer := time.NewTimer(l.wait)
 	select {
 	// used by batch to close early. usually triggered by max batch size
 	case <-close:
+		timer.Stop()
 		return
 	// this will move this goroutine to the back of the callstack?
-	case <-time.After(l.wait):
+	case <-timer.C:
 	}
 
 	// reset
