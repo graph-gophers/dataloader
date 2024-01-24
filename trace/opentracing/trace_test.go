@@ -3,8 +3,8 @@ package opentracing_test
 import (
 	"testing"
 
-	"github.com/graph-gophers/dataloader/v7"
-	"github.com/graph-gophers/dataloader/v7/trace/opentracing"
+	"github.com/graph-gophers/dataloader/v8"
+	"github.com/graph-gophers/dataloader/v8/trace/opentracing"
 )
 
 func TestInterfaceImplementation(t *testing.T) {

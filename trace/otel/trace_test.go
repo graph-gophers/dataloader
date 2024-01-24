@@ -3,8 +3,8 @@ package otel_test
 import (
 	"testing"
 
-	"github.com/graph-gophers/dataloader/v7"
-	"github.com/graph-gophers/dataloader/v7/trace/otel"
+	"github.com/graph-gophers/dataloader/v8"
+	"github.com/graph-gophers/dataloader/v8/trace/otel"
 )
 
 func TestInterfaceImplementation(t *testing.T) {
