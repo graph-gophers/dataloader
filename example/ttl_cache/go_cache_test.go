@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	dataloader "github.com/graph-gophers/dataloader/v8"
+	"github.com/graph-gophers/dataloader/v8"
 
-	cache "github.com/patrickmn/go-cache"
+	"github.com/patrickmn/go-cache"
 )
 
 // Cache implements the dataloader.Cache interface

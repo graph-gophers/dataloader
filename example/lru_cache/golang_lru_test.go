@@ -7,17 +7,17 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 
-	dataloader "github.com/graph-gophers/dataloader/v8"
+	"github.com/graph-gophers/dataloader/v8"
 )
 
 // Cache implements the dataloader.Cache interface
 type cache[K any, V any] struct {
-	*lru.ARCCache
+	arc *lru.ARCCache
 }
 
 // Get gets an item from the cache
 func (c *cache[K, V]) Get(_ context.Context, key dataloader.Key[K]) (dataloader.Thunk[V], bool) {
-	v, ok := c.ARCCache.Get(key.String())
+	v, ok := c.arc.Get(key.String())
 	if ok {
 		return v.(dataloader.Thunk[V]), ok
 	}
@@ -26,13 +26,13 @@ func (c *cache[K, V]) Get(_ context.Context, key dataloader.Key[K]) (dataloader.
 
 // Set sets an item in the cache
 func (c *cache[K, V]) Set(_ context.Context, key dataloader.Key[K], value dataloader.Thunk[V]) {
-	c.ARCCache.Add(key.String(), value)
+	c.arc.Add(key.String(), value)
 }
 
 // Delete deletes an item in the cache
 func (c *cache[K, V]) Delete(_ context.Context, key dataloader.Key[K]) bool {
-	if c.ARCCache.Contains(key.String()) {
-		c.ARCCache.Remove(key.String())
+	if c.arc.Contains(key.String()) {
+		c.arc.Remove(key.String())
 		return true
 	}
 	return false
@@ -40,7 +40,7 @@ func (c *cache[K, V]) Delete(_ context.Context, key dataloader.Key[K]) bool {
 
 // Clear clears the cache
 func (c *cache[K, V]) Clear() {
-	c.ARCCache.Purge()
+	c.arc.Purge()
 }
 
 func ExampleGolangLRU() {
@@ -65,9 +65,9 @@ func ExampleGolangLRU() {
 	}
 
 	// go-cache will automaticlly cleanup expired items on given duration.
-	c, _ := lru.NewARC(100)
-	cache := &cache[int, *User]{ARCCache: c}
-	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
+	arc, _ := lru.NewARC(100)
+	c := &cache[int, *User]{arc: arc}
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](c))
 
 	// immediately call the future function from loader
 	result, err := loader.Load(context.TODO(), dataloader.KeyOf(5))()
