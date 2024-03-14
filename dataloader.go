@@ -265,6 +265,8 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		l.count++
 		// if we hit our limit, force the batch to start
 		if l.count == l.batchCap {
+			// end/flush the batcher synchronously here because another call to Load
+			// may concurrently happen and needs to go to a new batcher.
 			l.flush()
 		}
 	}
@@ -276,9 +278,6 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 // flush() is a helper that runs whatever batched items there are immediately.
 // it must be called by code protected by a l.batchLock.Lock()
 func (l *Loader[K, V]) flush() {
-	// if we need to keep track of the count (max batch), then do so.
-	// end the batcher synchronously here because another call to Load
-	// may concurrently happen and needs to go to a new batcher.
 	l.curBatcher.end()
 
 	// end the sleeper for the current batcher.
