@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
-///////////////////////////////////////////////////
-// Tests
-///////////////////////////////////////////////////
+/*
+Tests
+*/
 func TestLoader(t *testing.T) {
 	t.Run("test Load method", func(t *testing.T) {
 		t.Parallel()
@@ -289,6 +290,7 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader[string](0)
 		ctx := context.Background()
+		start := time.Now()
 		future1 := identityLoader.Load(ctx, "1")
 		future2 := identityLoader.Load(ctx, "1")
 
@@ -301,12 +303,57 @@ func TestLoader(t *testing.T) {
 			t.Error(err.Error())
 		}
 
+		// also check that it took the full timeout to return
+		var duration = time.Since(start)
+		if duration < 16*time.Millisecond {
+			t.Errorf("took %v when expected it to take more than 16 ms because of wait", duration)
+		}
+
 		calls := *loadCalls
 		inner := []string{"1"}
 		expected := [][]string{inner}
 		if !reflect.DeepEqual(calls, expected) {
 			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
 		}
+	})
+
+	t.Run("doesn't wait for timeout if Flush() is called", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, loadCalls := IDLoader[string](0)
+		ctx := context.Background()
+		start := time.Now()
+		future1 := identityLoader.Load(ctx, "1")
+		future2 := identityLoader.Load(ctx, "2")
+
+		// trigger them to be fetched immediately vs waiting for the 16 ms timer
+		identityLoader.Flush()
+
+		_, err := future1()
+		if err != nil {
+			t.Error(err.Error())
+		}
+		_, err = future2()
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		var duration = time.Since(start)
+		if duration > 2*time.Millisecond {
+			t.Errorf("took %v when expected it to take less than 2 ms b/c we called Flush()", duration)
+		}
+
+		calls := *loadCalls
+		inner := []string{"1", "2"}
+		expected := [][]string{inner}
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("did not respect max batch size. Expected %#v, got %#v", expected, calls)
+		}
+	})
+
+	t.Run("Nothing for Flush() to do on empty loader with current batch", func(t *testing.T) {
+		t.Parallel()
+		identityLoader, _ := IDLoader[string](0)
+		identityLoader.Flush()
 	})
 
 	t.Run("allows primed cache", func(t *testing.T) {
@@ -678,9 +725,9 @@ func FaultyLoader[K comparable]() (*Loader[K, K], *[][]K) {
 	return loader, &loadCalls
 }
 
-///////////////////////////////////////////////////
-// Benchmarks
-///////////////////////////////////////////////////
+/*
+Benchmarks
+*/
 var a = &Avg{}
 
 func batchIdentity[K comparable](_ context.Context, keys []K) (results []*Result[K]) {
