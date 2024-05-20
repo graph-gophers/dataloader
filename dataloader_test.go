@@ -79,6 +79,45 @@ func TestLoader(t *testing.T) {
 		}
 	})
 
+	t.Run("test Load Method not caching results with errors of type SkipCacheError", func(t *testing.T) {
+		t.Parallel()
+		skipCacheLoader, loadCalls := SkipCacheErrorLoader(3, "1")
+		ctx := context.Background()
+		futures1 := skipCacheLoader.LoadMany(ctx, []string{"1", "2", "3"})
+		_, errs1 := futures1()
+		var errCount int = 0
+		var nilCount int = 0
+		for _, err := range errs1 {
+			if err == nil {
+				nilCount++
+			} else {
+				errCount++
+			}
+		}
+		if errCount != 1 {
+			t.Error("Expected an error on only key \"1\"")
+		}
+
+		if nilCount != 2 {
+			t.Error("Expected the other errors to be nil")
+		}
+
+		futures2 := skipCacheLoader.LoadMany(ctx, []string{"2", "3", "1"})
+		_, errs2 := futures2()
+		// There should be no errors in the second batch, as the only key that was not cached
+		// this time around will not throw an error
+		if errs2 != nil {
+			t.Error("Expected LoadMany() to return nil error slice when no errors occurred")
+		}
+
+		calls := (*loadCalls)[1]
+		expected := []string{"1"}
+
+		if !reflect.DeepEqual(calls, expected) {
+			t.Errorf("Expected load calls %#v, got %#v", expected, calls)
+		}
+	})
+
 	t.Run("test Load Method Panic Safety in multiple keys", func(t *testing.T) {
 		t.Parallel()
 		defer func() {
@@ -620,6 +659,30 @@ func ErrorCacheLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
 
 	}, WithBatchCapacity[K, K](max), withSilentLogger[K, K]())
 	return errorCacheLoader, &loadCalls
+}
+
+func SkipCacheErrorLoader[K comparable](max int, onceErrorKey K) (*Loader[K, K], *[][]K) {
+	var mu sync.Mutex
+	var loadCalls [][]K
+	errorThrown := false
+	skipCacheErrorLoader := NewBatchedLoader(func(_ context.Context, keys []K) []*Result[K] {
+		var results []*Result[K]
+		mu.Lock()
+		loadCalls = append(loadCalls, keys)
+		mu.Unlock()
+		// return a non cacheable error for the first occurence of onceErrorKey
+		for _, k := range keys {
+			if !errorThrown && k == onceErrorKey {
+				results = append(results, &Result[K]{k, NewSkipCacheError(fmt.Errorf("non cacheable error"))})
+				errorThrown = true
+			} else {
+				results = append(results, &Result[K]{k, nil})
+			}
+		}
+
+		return results
+	}, WithBatchCapacity[K, K](max))
+	return skipCacheErrorLoader, &loadCalls
 }
 
 func BadLoader[K comparable](max int) (*Loader[K, K], *[][]K) {
