@@ -70,6 +70,10 @@ func (s *SkipCacheError) Error() string {
 	return s.err.Error()
 }
 
+func (s *SkipCacheError) Unwrap() error {
+	return s.err
+}
+
 func NewSkipCacheError(err error) *SkipCacheError {
 	return &SkipCacheError{err: err}
 }
