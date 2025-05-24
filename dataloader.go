@@ -60,6 +60,24 @@ func (p *PanicErrorWrapper) Error() string {
 	return p.panicError.Error()
 }
 
+// SkipCacheError wraps the error interface.
+// The cache should not store SkipCacheErrors.
+type SkipCacheError struct {
+	err error
+}
+
+func (s *SkipCacheError) Error() string {
+	return s.err.Error()
+}
+
+func (s *SkipCacheError) Unwrap() error {
+	return s.err
+}
+
+func NewSkipCacheError(err error) *SkipCacheError {
+	return &SkipCacheError{err: err}
+}
+
 // Loader implements the dataloader.Interface.
 type Loader[K comparable, V any] struct {
 	// the batch function to be used by this loader
@@ -249,7 +267,8 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		result.mu.RLock()
 		defer result.mu.RUnlock()
 		var ev *PanicErrorWrapper
-		if result.value.Error != nil && errors.As(result.value.Error, &ev) {
+		var es *SkipCacheError
+		if result.value.Error != nil && (errors.As(result.value.Error, &ev) || errors.As(result.value.Error, &es)){
 			l.Clear(ctx, key)
 		}
 		return result.value.Data, result.value.Error
