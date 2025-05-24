@@ -26,6 +26,7 @@ type Interface[K comparable, V any] interface {
 	Clear(context.Context, K) Interface[K, V]
 	ClearAll() Interface[K, V]
 	Prime(ctx context.Context, key K, value V) Interface[K, V]
+	Flush()
 }
 
 // BatchFunc is a function, which when given a slice of keys (string), returns a slice of `results`.
@@ -298,18 +299,35 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		l.count++
 		// if we hit our limit, force the batch to start
 		if l.count == l.batchCap {
-			// end the batcher synchronously here because another call to Load
+			// end/flush the batcher synchronously here because another call to Load
 			// may concurrently happen and needs to go to a new batcher.
-			l.curBatcher.end()
-			// end the sleeper for the current batcher.
-			// this is to stop the goroutine without waiting for the
-			// sleeper timeout.
-			close(l.endSleeper)
-			l.reset()
+			l.flush()
 		}
 	}
 
 	return thunk
+}
+
+// flush() is a helper that runs whatever batched items there are immediately.
+// it must be called by code protected by a l.batchLock.Lock()
+func (l *Loader[K, V]) flush() {
+	l.curBatcher.end()
+
+	// end the sleeper for the current batcher.
+	// this is to stop the goroutine without waiting for the
+	// sleeper timeout.
+	close(l.endSleeper)
+	l.reset()
+}
+
+// Flush will load the items in the current batch immediately without waiting for the timer.
+func (l *Loader[K, V]) Flush() {
+	l.batchLock.Lock()
+	defer l.batchLock.Unlock()
+	if l.curBatcher == nil {
+		return
+	}
+	l.flush()
 }
 
 // LoadMany loads multiple keys, returning a thunk (type: ThunkMany) that will resolve the keys passed in.
