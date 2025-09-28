@@ -9,6 +9,7 @@ import (
 	"log"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -135,8 +136,9 @@ type ThunkMany[V any] func() ([]V, []error)
 
 // type used to on input channel
 type batchRequest[K comparable, V any] struct {
-	key     K
-	channel chan *Result[V]
+	key    K
+	result atomic.Pointer[Result[V]]
+	done   chan struct{}
 }
 
 // Option allows for configuration of Loader fields.
@@ -225,11 +227,9 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 // the registered BatchFunc.
 func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
-
-	c := make(chan *Result[V], 1)
-	var result struct {
-		mu    sync.RWMutex
-		value *Result[V]
+	req := &batchRequest[K, V]{
+		key:  key,
+		done: make(chan struct{}),
 	}
 
 	// We need to lock both the batchLock and cacheLock because the batcher can
@@ -258,33 +258,18 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	defer l.cacheLock.Unlock()
 
 	thunk := func() (V, error) {
-		result.mu.RLock()
-		resultNotSet := result.value == nil
-		result.mu.RUnlock()
-
-		if resultNotSet {
-			result.mu.Lock()
-			if v, ok := <-c; ok {
-				result.value = v
-			}
-			result.mu.Unlock()
-		}
-		result.mu.RLock()
-		defer result.mu.RUnlock()
+		<-req.done
+		result := req.result.Load()
 		var ev *PanicErrorWrapper
 		var es *SkipCacheError
-		if result.value.Error != nil && (errors.As(result.value.Error, &ev) || errors.As(result.value.Error, &es)) {
+		if result.Error != nil && (errors.As(result.Error, &ev) || errors.As(result.Error, &es)) {
 			l.Clear(ctx, key)
 		}
-		return result.value.Data, result.value.Error
+		return result.Data, result.Error
 	}
 	defer finish(thunk)
 
 	l.cache.Set(ctx, key, thunk)
-
-	// this is sent to batch fn. It contains the key and the channel to return
-	// the result on
-	req := &batchRequest[K, V]{key, c}
 
 	// start the batch window if it hasn't already started.
 	if l.curBatcher == nil {
@@ -342,8 +327,9 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 		length = len(keys)
 		data   = make([]V, length)
 		errors = make([]error, length)
-		c      = make(chan *ResultMany[V], 1)
+		result atomic.Pointer[ResultMany[V]]
 		wg     sync.WaitGroup
+		done   = make(chan struct{})
 	)
 
 	resolve := func(ctx context.Context, i int) {
@@ -360,6 +346,7 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 	}
 
 	go func() {
+		defer close(done)
 		wg.Wait()
 
 		// errs is nil unless there exists a non-nil error.
@@ -372,30 +359,13 @@ func (l *Loader[K, V]) LoadMany(originalContext context.Context, keys []K) Thunk
 			}
 		}
 
-		c <- &ResultMany[V]{Data: data, Error: errs}
-		close(c)
+		result.Store(&ResultMany[V]{Data: data, Error: errs})
 	}()
 
-	var result struct {
-		mu    sync.RWMutex
-		value *ResultMany[V]
-	}
-
 	thunkMany := func() ([]V, []error) {
-		result.mu.RLock()
-		resultNotSet := result.value == nil
-		result.mu.RUnlock()
-
-		if resultNotSet {
-			result.mu.Lock()
-			if v, ok := <-c; ok {
-				result.value = v
-			}
-			result.mu.Unlock()
-		}
-		result.mu.RLock()
-		defer result.mu.RUnlock()
-		return result.value.Data, result.value.Error
+		<-done
+		r := result.Load()
+		return r.Data, r.Error
 	}
 
 	defer finish(thunkMany)
@@ -502,8 +472,8 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	if panicErr != nil {
 		for _, req := range reqs {
-			req.channel <- &Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}}
-			close(req.channel)
+			req.result.Store(&Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}})
+			close(req.done)
 		}
 		return
 	}
@@ -521,8 +491,8 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 		`, keys, items)}
 
 		for _, req := range reqs {
-			req.channel <- err
-			close(req.channel)
+			req.result.Store(err)
+			close(req.done)
 		}
 
 		return
@@ -534,11 +504,11 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 			if notSetResult == nil {
 				notSetResult = &Result[V]{Error: ErrNoResultProvided}
 			}
-			req.channel <- notSetResult
+			req.result.Store(notSetResult)
 		} else {
-			req.channel <- items[i]
+			req.result.Store(items[i])
 		}
-		close(req.channel)
+		close(req.done)
 	}
 }
 
