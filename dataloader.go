@@ -29,8 +29,12 @@ type Interface[K comparable, V any] interface {
 	Flush()
 }
 
+var ErrNoResultProvided = errors.New("no result provided")
+
 // BatchFunc is a function, which when given a slice of keys (string), returns a slice of `results`.
 // It's important that the length of the input keys matches the length of the output results.
+// Should the batch function return nil for a result, it will be treated as return an error
+// of `ErrNoResultProvided` for that key.
 //
 // The keys passed to this function are guaranteed to be unique
 type BatchFunc[K comparable, V any] func(context.Context, []K) []*Result[V]
@@ -269,7 +273,7 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		defer result.mu.RUnlock()
 		var ev *PanicErrorWrapper
 		var es *SkipCacheError
-		if result.value.Error != nil && (errors.As(result.value.Error, &ev) || errors.As(result.value.Error, &es)){
+		if result.value.Error != nil && (errors.As(result.value.Error, &ev) || errors.As(result.value.Error, &es)) {
 			l.Clear(ctx, key)
 		}
 		return result.value.Data, result.value.Error
@@ -524,8 +528,16 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 		return
 	}
 
+	var notSetResult *Result[V] // don't allocate unless we need it
 	for i, req := range reqs {
-		req.channel <- items[i]
+		if items[i] == nil {
+			if notSetResult == nil {
+				notSetResult = &Result[V]{Error: ErrNoResultProvided}
+			}
+			req.channel <- notSetResult
+		} else {
+			req.channel <- items[i]
+		}
 		close(req.channel)
 	}
 }
