@@ -1,6 +1,6 @@
 module github.com/graph-gophers/dataloader/v7
 
-go 1.18
+go 1.19
 
 require (
 	github.com/hashicorp/golang-lru v0.5.4
