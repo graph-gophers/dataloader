@@ -254,9 +254,6 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		return v
 	}
 
-	defer l.batchLock.Unlock()
-	defer l.cacheLock.Unlock()
-
 	thunk := func() (V, error) {
 		<-req.done
 		result := req.result.Load()
@@ -293,6 +290,12 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 			l.flush()
 		}
 	}
+
+	// NOTE: It is intended that these are not unlocked with a `defer`. This is due to the `defer finish(thunk)` above.
+	// There is a locking bug where, if you have a tracer that calls the thunk to read the results, the dataloader runs
+	// into a deadlock scenario, as `finish` is called before these mutexes are free'd on the same goroutine.
+	l.batchLock.Unlock()
+	l.cacheLock.Unlock()
 
 	return thunk
 }
