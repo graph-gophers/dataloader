@@ -46,7 +46,7 @@ jobs:
           gofmt -w -r 'interface{} -> any' .
           if ! git diff --exit-code -- .; then
             echo "::error::gofmt found modernization opportunities"
-            echo "Run 'gofmt -w -r 'interface{} -> any' .' locally and commit the changes."
+            echo "Run \`gofmt -w -r 'interface{} -> any' .\` locally and commit the changes."
             exit 1
           fi
           echo "✓ No go fix suggestions - code is up to date."
