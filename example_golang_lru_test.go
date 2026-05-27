@@ -1,5 +1,4 @@
-// package lru_cache_test contains an exmaple of using go-cache as a long term cache solution for dataloader.
-package lru_cache_test
+package dataloader_test
 
 import (
 	"context"
@@ -10,13 +9,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// Cache implements the dataloader.Cache interface
-type cache[K comparable, V any] struct {
+type lruCacheAdapter[K comparable, V any] struct {
 	*lru.ARCCache
 }
 
-// Get gets an item from the cache
-func (c *cache[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) {
+func (c *lruCacheAdapter[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) {
 	v, ok := c.ARCCache.Get(key)
 	if ok {
 		return v.(dataloader.Thunk[V]), ok
@@ -24,13 +21,11 @@ func (c *cache[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) 
 	return nil, ok
 }
 
-// Set sets an item in the cache
-func (c *cache[K, V]) Set(_ context.Context, key K, value dataloader.Thunk[V]) {
+func (c *lruCacheAdapter[K, V]) Set(_ context.Context, key K, value dataloader.Thunk[V]) {
 	c.ARCCache.Add(key, value)
 }
 
-// Delete deletes an item in the cache
-func (c *cache[K, V]) Delete(_ context.Context, key K) bool {
+func (c *lruCacheAdapter[K, V]) Delete(_ context.Context, key K) bool {
 	if c.ARCCache.Contains(key) {
 		c.ARCCache.Remove(key)
 		return true
@@ -38,12 +33,11 @@ func (c *cache[K, V]) Delete(_ context.Context, key K) bool {
 	return false
 }
 
-// Clear clears the cache
-func (c *cache[K, V]) Clear() {
+func (c *lruCacheAdapter[K, V]) Clear() {
 	c.ARCCache.Purge()
 }
 
-func ExampleGolangLRU() {
+func ExampleNewBatchedLoader_golangLRU() {
 	type User struct {
 		ID        int
 		Email     string
@@ -57,19 +51,16 @@ func ExampleGolangLRU() {
 
 	batchFunc := func(_ context.Context, keys []int) []*dataloader.Result[*User] {
 		var results []*dataloader.Result[*User]
-		// do some pretend work to resolve keys
 		for _, k := range keys {
 			results = append(results, &dataloader.Result[*User]{Data: m[k]})
 		}
 		return results
 	}
 
-	// go-cache will automatically cleanup expired items on given duration.
 	c, _ := lru.NewARC(100)
-	cache := &cache[int, *User]{ARCCache: c}
-	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](cache))
+	adapter := &lruCacheAdapter[int, *User]{ARCCache: c}
+	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](adapter))
 
-	// immediately call the future function from loader
 	result, err := loader.Load(context.TODO(), 5)()
 	if err != nil {
 		// handle error
