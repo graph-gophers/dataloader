@@ -65,7 +65,7 @@ func TestLoader(t *testing.T) {
 		errorCacheLoader, _ := ErrorCacheLoader[string](0)
 		ctx := context.Background()
 		futures := []Thunk[string]{}
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			futures = append(futures, errorCacheLoader.Load(ctx, strconv.Itoa(i)))
 		}
 
@@ -134,7 +134,7 @@ func TestLoader(t *testing.T) {
 		panicLoader, _ := PanicCacheLoader[string](0)
 		futures := []Thunk[string]{}
 		ctx := context.Background()
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			futures = append(futures, panicLoader.Load(ctx, strconv.Itoa(i)))
 		}
 		for _, f := range futures {
@@ -145,7 +145,7 @@ func TestLoader(t *testing.T) {
 		}
 
 		futures = []Thunk[string]{}
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			futures = append(futures, panicLoader.Load(ctx, strconv.Itoa(1)))
 		}
 
@@ -318,7 +318,7 @@ func TestLoader(t *testing.T) {
 
 		n := 10
 		reqs := []Thunk[string]{}
-		for i := 0; i < n; i++ {
+		for i := range n {
 			key := strconv.Itoa(i)
 			reqs = append(reqs, faultyLoader.Load(ctx, key))
 		}

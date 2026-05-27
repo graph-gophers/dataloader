@@ -449,7 +449,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 		keys     = make([]K, 0)
 		reqs     = make([]*batchRequest[K, V], 0)
 		items    = make([]*Result[V], 0)
-		panicErr interface{}
+		panicErr any
 	)
 
 	for item := range b.input {
