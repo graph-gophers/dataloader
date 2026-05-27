@@ -227,10 +227,6 @@ func NewBatchedLoader[K comparable, V any](batchFn BatchFunc[K, V], opts ...Opti
 // the registered BatchFunc.
 func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 	ctx, finish := l.tracer.TraceLoad(originalContext, key)
-	req := &batchRequest[K, V]{
-		key:  key,
-		done: make(chan struct{}),
-	}
 
 	// We need to lock both the batchLock and cacheLock because the batcher can
 	// reset the cache when either the batchCap or the wait time is reached.
@@ -252,6 +248,13 @@ func (l *Loader[K, V]) Load(originalContext context.Context, key K) Thunk[V] {
 		l.batchLock.Unlock()
 		defer finish(v)
 		return v
+	}
+
+	// Only a cache miss needs a batch request: allocating it (and its channel)
+	// before the cache check above wastes an allocation on every cache hit.
+	req := &batchRequest[K, V]{
+		key:  key,
+		done: make(chan struct{}),
 	}
 
 	thunk := func() (V, error) {
