@@ -35,8 +35,12 @@ func TestLoader(t *testing.T) {
 		identityLoader, _ := IDLoader[string](0)
 		ctx := context.Background()
 		future := identityLoader.Load(ctx, "1")
-		go future()
-		go future()
+		go func() {
+			_, _ = future()
+		}()
+		go func() {
+			_, _ = future()
+		}()
 	})
 
 	t.Run("test Load Method Panic Safety", func(t *testing.T) {
@@ -51,7 +55,7 @@ func TestLoader(t *testing.T) {
 		ctx := context.Background()
 		future := panicLoader.Load(ctx, "1")
 		_, err := future()
-		if err == nil || err.Error() != "Panic received in batch function: Programming error" {
+		if err == nil || err.Error() != "panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
 	})
@@ -86,8 +90,8 @@ func TestLoader(t *testing.T) {
 		ctx := context.Background()
 		futures1 := skipCacheLoader.LoadMany(ctx, []string{"1", "2", "3"})
 		_, errs1 := futures1()
-		var errCount int = 0
-		var nilCount int = 0
+		errCount := 0
+		nilCount := 0
 		for _, err := range errs1 {
 			if err == nil {
 				nilCount++
@@ -135,7 +139,7 @@ func TestLoader(t *testing.T) {
 		}
 		for _, f := range futures {
 			_, err := f()
-			if err == nil || err.Error() != "Panic received in batch function: Programming error" {
+			if err == nil || err.Error() != "panic received in batch function: Programming error" {
 				t.Error("Panic was not propagated as an error.")
 			}
 		}
@@ -190,8 +194,8 @@ func TestLoader(t *testing.T) {
 			t.Errorf("LoadMany didn't return right number of errors (should match size of input)")
 		}
 
-		var errCount int = 0
-		var nilCount int = 0
+		errCount := 0
+		nilCount := 0
 		for _, err := range errs {
 			if err == nil {
 				nilCount++
@@ -259,7 +263,7 @@ func TestLoader(t *testing.T) {
 		ctx := context.Background()
 		future := panicLoader.LoadMany(ctx, []string{"1", "2"})
 		_, errs := future()
-		if len(errs) < 2 || errs[0].Error() != "Panic received in batch function: Programming error" {
+		if len(errs) < 2 || errs[0].Error() != "panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
 
@@ -314,11 +318,9 @@ func TestLoader(t *testing.T) {
 
 		n := 10
 		reqs := []Thunk[string]{}
-		var keys []string
 		for i := 0; i < n; i++ {
 			key := strconv.Itoa(i)
 			reqs = append(reqs, faultyLoader.Load(ctx, key))
-			keys = append(keys, key)
 		}
 
 		for _, future := range reqs {

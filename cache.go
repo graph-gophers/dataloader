@@ -19,10 +19,10 @@ type NoCache[K comparable, V any] struct{}
 func (c *NoCache[K, V]) Get(context.Context, K) (Thunk[V], bool) { return nil, false }
 
 // Set is a NOOP
-func (c *NoCache[K, V]) Set(context.Context, K, Thunk[V]) { return }
+func (c *NoCache[K, V]) Set(context.Context, K, Thunk[V]) {}
 
 // Delete is a NOOP
 func (c *NoCache[K, V]) Delete(context.Context, K) bool { return false }
 
 // Clear is a NOOP
-func (c *NoCache[K, V]) Clear() { return }
+func (c *NoCache[K, V]) Clear() {}

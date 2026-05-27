@@ -10,11 +10,11 @@ import (
 )
 
 type lruCacheAdapter[K comparable, V any] struct {
-	*lru.ARCCache
+	cache *lru.ARCCache
 }
 
 func (c *lruCacheAdapter[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[V], bool) {
-	v, ok := c.ARCCache.Get(key)
+	v, ok := c.cache.Get(key)
 	if ok {
 		return v.(dataloader.Thunk[V]), ok
 	}
@@ -22,19 +22,19 @@ func (c *lruCacheAdapter[K, V]) Get(_ context.Context, key K) (dataloader.Thunk[
 }
 
 func (c *lruCacheAdapter[K, V]) Set(_ context.Context, key K, value dataloader.Thunk[V]) {
-	c.ARCCache.Add(key, value)
+	c.cache.Add(key, value)
 }
 
 func (c *lruCacheAdapter[K, V]) Delete(_ context.Context, key K) bool {
-	if c.ARCCache.Contains(key) {
-		c.ARCCache.Remove(key)
+	if c.cache.Contains(key) {
+		c.cache.Remove(key)
 		return true
 	}
 	return false
 }
 
 func (c *lruCacheAdapter[K, V]) Clear() {
-	c.ARCCache.Purge()
+	c.cache.Purge()
 }
 
 func ExampleNewBatchedLoader_golangLRU() {
@@ -58,7 +58,7 @@ func ExampleNewBatchedLoader_golangLRU() {
 	}
 
 	c, _ := lru.NewARC(100)
-	adapter := &lruCacheAdapter[int, *User]{ARCCache: c}
+	adapter := &lruCacheAdapter[int, *User]{cache: c}
 	loader := dataloader.NewBatchedLoader(batchFunc, dataloader.WithCache[int, *User](adapter))
 
 	result, err := loader.Load(context.TODO(), 5)()
