@@ -35,12 +35,18 @@ func TestLoader(t *testing.T) {
 		identityLoader, _ := IDLoader[string](0)
 		ctx := context.Background()
 		future := identityLoader.Load(ctx, "1")
-		go func() {
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		run := func() {
+			defer wg.Done()
+			<-start
 			_, _ = future()
-		}()
-		go func() {
-			_, _ = future()
-		}()
+		}
+		go run()
+		go run()
+		close(start)
+		wg.Wait()
 	})
 
 	t.Run("test Load Method Panic Safety", func(t *testing.T) {
