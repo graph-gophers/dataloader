@@ -449,7 +449,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 		keys     = make([]K, 0)
 		reqs     = make([]*batchRequest[K, V], 0)
 		items    = make([]*Result[V], 0)
-		panicErr interface{}
+		panicErr any
 	)
 
 	for item := range b.input {
@@ -478,7 +478,7 @@ func (b *batcher[K, V]) batch(originalContext context.Context) {
 
 	if panicErr != nil {
 		for _, req := range reqs {
-			req.result.Store(&Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("Panic received in batch function: %v", panicErr)}})
+			req.result.Store(&Result[V]{Error: &PanicErrorWrapper{panicError: fmt.Errorf("panic received in batch function: %v", panicErr)}})
 			close(req.done)
 		}
 		return

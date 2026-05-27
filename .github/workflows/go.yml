@@ -1,28 +1,52 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.19
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
-    - name: Build
-      run: go build -v ./...
+      - name: Build
+        run: go build ./...
 
-    - name: Test
-      run: go test -v ./...
+      - name: Test
+        run: go test -race ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+
+      - name: Check for go fix suggestions
+        run: |
+          # When this repo moves to a Go version that supports `go fix -diff`,
+          # this can be simplified back to checking the diff output directly.
+          go fix ./...
+          if ! git diff --exit-code -- .; then
+            echo "::error::go fix found modernization opportunities"
+            echo "Run 'go fix ./...' locally and commit the changes."
+            exit 1
+          fi
+
+          gofmt -w -r 'interface{} -> any' .
+          if ! git diff --exit-code -- .; then
+            echo "::error::gofmt found modernization opportunities"
+            echo "Run \`gofmt -w -r 'interface{} -> any' .\` locally and commit the changes."
+            exit 1
+          fi
+          echo "✓ No go fix suggestions - code is up to date."
